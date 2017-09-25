@@ -113,6 +113,7 @@ int ic=0;
 void cpuProp::imageCondition(float *rec, float *src, float *img){
  tbb::parallel_for(tbb::blocked_range<int>(0,_n123),[&](
   const tbb::blocked_range<int>&r){
+#pragma omp simd
   for(int  i=r.begin(); i!=r.end(); ++i){
 		img[i]+=src[i]*rec[i];
 	}
@@ -169,15 +170,14 @@ void cpuProp::damp(float *p0,float *p1){
 		for(int i2=4; i2 < _ny-4; i2++) {
 			int edge2=std::min(edge1,std::min(i2-4,_ny-4-i2));
 			int ii=i2*_nx+4+_n12*i3;
+			//int ii_end = i2 * _nx + _nx - 4 + _n12 * i3;
+#pragma omp simd
 			for(int i1=4; i1 < _nx-4; i1++,ii++) {
 				int edge=std::min(edge2,std::min(i1-4,_nx-4-i1));
-	
 				if(edge>=0 && edge < _bound.size()) {
-					//		if(i2==600 && i1==600 && i3 < 70)
-				 // fprintf(stderr,"check i3=%d edge=%d value=%f \n",
-				 //x i3,edge,_bound[edge]); 
-					p0[ii]*=_bound[edge];
-					p1[ii]*=_bound[edge];
+					float bound_val = _bound[edge];
+					p0[ii]*=bound_val;
+					p1[ii]*=bound_val;
 				}
 			}
 		}
