@@ -6,7 +6,6 @@ html
 latex
 RUN_THIS
 junk
-*.H
 *.json
 RUN
 *.o
