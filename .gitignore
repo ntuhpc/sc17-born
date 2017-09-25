@@ -1,0 +1,16 @@
+build
+*.sw*
+*gch
+doc
+html
+latex
+RUN_THIS
+junk
+*.H
+*.json
+RUN
+*.o
+*P
+*.err
+*.out
+sendit.*

@@ -1,0 +1,24 @@
+#%Module1.0#####################################################################
+##
+## SEPlib
+##
+##  V7
+##
+proc ModulesHelp { } {
+        global version
+
+        puts stderr "\tThis module adds Born to your environment"
+}
+
+module-whatis "(Category_______) Seismic software"
+module-whatis "(Name___________) Born"
+module-whatis "(Version________) 1.0"
+module-whatis "(Authorship_____) Robert Clapp"
+
+
+# for Tcl script use only
+set     version      "3.2.10"
+
+set born @CMAKE_INSTALL_PREFIX@
+append-path PATH $born/bin
+prepend-path LD_LIBRARY_PATH $born/lib

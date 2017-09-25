@@ -1,0 +1,18 @@
+From debian:latest
+MAINTAINER Bob Clapp <bob@sep.stanford.edu>
+RUN apt-get -y update &&\
+    apt-get -y  install g++ git make cmake gcc &&\
+  apt-get -y clean
+RUN git clone http://zapad.Stanford.EDU/bob/hypercube.git   /opt/hypercube/src && \
+    mkdir /opt/hypercube/build && \
+    cd /opt/hypercube/build &&\
+    cmake -DCMAKE_INSTALL_PREFIX=/opt/hypercube ../src &&\
+    make install &&\
+    rm -rf /opt/hypercube/build
+RUN git clone http://zapad.Stanford.EDU/bob/genericIO.git /opt/genericIO/src && \
+    mkdir /opt/genericIO/build &&\
+    cd /opt/genericIO/build &&\
+    cmake  -Dhypercube_DIR=/opt/hypercube/lib  -DCMAKE_INSTALL_PREFIX=/opt/genericIO ../src &&\
+    make install && \
+    rm -rf /opt/genericIO/build
+
