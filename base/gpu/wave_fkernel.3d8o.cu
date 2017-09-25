@@ -2,6 +2,7 @@
 	By: Chris Leader, Abdullah AlTheyab
 	Ref: similar to Paulius code but for 2D, then re-extended to 3D
  */
+#include "gpu_finite_3d.h"
 #define BLOCKZ_SIZE 16
 #define BLOCKX_SIZE 16 
 #define BLOCKY_SIZE 16

@@ -2,8 +2,8 @@
 //#include "cutil_math.h"
 #include "gpu_finite_3d.h"
 #include <stdlib.h>
-#include "sep3d.h"
-#include "seplib.h"  
+//#include "sep3d.h"
+//#include "seplib.h"  
 #include "cudaErrors.cu"
 int ntblock_internal;
 #include "wave_fkernel.3d8o.cu"
