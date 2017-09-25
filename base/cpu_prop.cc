@@ -268,27 +268,38 @@ void cpuProp::prop(float *p0, float *p1, float *vel){
 	// blocking optimization
 	// parallelize along both Z & Y dimension, instead of just Z
 	// TODO: determine the optimal tile_size
-	size_t tile_size = 8;
+	size_t tile_size = 10;
+	int y1 = _nx;
+	int y2 = 2 * _nx;
+	int y3 = 3 * _nx;
+	int y4 = 4 * _nx;
+	int z1 = _n12;
+	int z2 = 2 * _n12;
+	int z3 = 4 * _n12;
+	int z4 = 4 * _n12;
+
 	tbb::parallel_for(tbb::blocked_range2d<int>(4, _nz - 4, tile_size, 4, _ny - 4, tile_size),
 		[&](const tbb::blocked_range2d<int> &r) {
 			for (int i3 = r.rows().begin(), i3_end = r.rows().end(); i3 < i3_end; ++i3) {
 				for (int i2 = r.cols().begin(), i2_end = r.cols().end(); i2 < i2_end; ++i2) {
 					int ii = i2 * _nx + _n12 * i3 + 4;
-					for (int i1 = 4, i1_end = _nx - 4; i1 < i1_end; ++i1, ++ii) {
-						float x = p0[ii] = vel[ii] * (
+					int i1_end = _nx - 4;
+#pragma omp simd
+					for (int i1 = 4; i1 < i1_end; ++i1, ++ii) {
+						p0[ii] = vel[ii] * (
 							coeffs[C0] * p1[ii] +
 							coeffs[CX1] * (p1[ii-1] + p1[ii+1]) +
 							coeffs[CX2] * (p1[ii-2] + p1[ii+2]) +
 							coeffs[CX3] * (p1[ii-3] + p1[ii+3]) +
 							coeffs[CX4] * (p1[ii-4] + p1[ii+4]) +
-							coeffs[CY1] * (p1[ii-_nx] + p1[ii+_nx]) +
-							coeffs[CY2] * (p1[ii-2*_nx] + p1[ii+2*_nx]) +
-							coeffs[CY3] * (p1[ii-3*_nx] + p1[ii+3*_nx]) +
-							coeffs[CY4] * (p1[ii-4*_nx] + p1[ii+4*_nx]) +
-							coeffs[CZ1] * (p1[ii-1*_n12] + p1[ii+1*_n12]) +
-							coeffs[CZ2] * (p1[ii-2*_n12] + p1[ii+2*_n12]) +
-							coeffs[CZ3] * (p1[ii-3*_n12] + p1[ii+3*_n12]) +
-							coeffs[CZ4] * (p1[ii-4*_n12] + p1[ii+4*_n12])) +
+							coeffs[CY1] * (p1[ii-y1] + p1[ii+y1]) +
+							coeffs[CY2] * (p1[ii-y2] + p1[ii+y2]) +
+							coeffs[CY3] * (p1[ii-y3] + p1[ii+y3]) +
+							coeffs[CY4] * (p1[ii-y4] + p1[ii+y4]) +
+							coeffs[CZ1] * (p1[ii-z1] + p1[ii+z1]) +
+							coeffs[CZ2] * (p1[ii-z2] + p1[ii+z2]) +
+							coeffs[CZ3] * (p1[ii-z3] + p1[ii+z3]) +
+							coeffs[CZ4] * (p1[ii-z4] + p1[ii+z4])) +
 							p1[ii] + p1[ii] - p0[ii];
 					}
 				}
