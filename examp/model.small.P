@@ -1,0 +1,6 @@
+{
+"data": "data.small.json",
+"image": "ref.small.json",
+"velocity": "vel.small.json",
+"wavelet": "wavelet.json"
+}
