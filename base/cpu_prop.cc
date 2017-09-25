@@ -268,7 +268,7 @@ void cpuProp::prop(float *p0, float *p1, float *vel){
 	// blocking optimization
 	// parallelize along both Z & Y dimension, instead of just Z
 	// TODO: determine the optimal tile_size
-	size_t tile_size = 10;
+	size_t tile_size = 8;
 	int y1 = _nx;
 	int y2 = 2 * _nx;
 	int y3 = 3 * _nx;
@@ -286,8 +286,9 @@ void cpuProp::prop(float *p0, float *p1, float *vel){
 					int i1_end = _nx - 4;
 #pragma omp simd
 					for (int i1 = 4; i1 < i1_end; ++i1, ++ii) {
+						float p1_val = p1[ii];
 						p0[ii] = vel[ii] * (
-							coeffs[C0] * p1[ii] +
+							coeffs[C0] * p1_val +
 							coeffs[CX1] * (p1[ii-1] + p1[ii+1]) +
 							coeffs[CX2] * (p1[ii-2] + p1[ii+2]) +
 							coeffs[CX3] * (p1[ii-3] + p1[ii+3]) +
@@ -300,7 +301,7 @@ void cpuProp::prop(float *p0, float *p1, float *vel){
 							coeffs[CZ2] * (p1[ii-z2] + p1[ii+z2]) +
 							coeffs[CZ3] * (p1[ii-z3] + p1[ii+z3]) +
 							coeffs[CZ4] * (p1[ii-z4] + p1[ii+z4])) +
-							p1[ii] + p1[ii] - p0[ii];
+							p1_val + p1_val - p0[ii];
 					}
 				}
 			}
