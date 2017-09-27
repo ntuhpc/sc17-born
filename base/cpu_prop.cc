@@ -2,6 +2,7 @@
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/parallel_for.h>
+#include <tbb/task_group.h>
 #include "cpu_prop.h"
 #define C0  0
 #define CZ1 1
@@ -16,6 +17,182 @@
 #define CZ4 10
 #define CX4 11
 #define CY4 12
+
+#ifdef __COB
+// Number of PIECES to partition in each dimension for parallelization using cilk_spawn
+const int c_NPIECES = 2;
+// Threshold for chunk partition in Time
+const int c_dt_threshold = 3;
+// Threshold for chunk partition in direction x
+const int c_dx_threshold = 1000;
+// Threshold for chunk partition in direction y and direction z
+const int c_dyz_threshold = 3;
+const int c_distance = 4;
+
+float* p0_global;
+float* p1_global;
+float* vel_global;
+
+void cpuProp::co_basecase_simd(int t0, int t1, 
+	int x0, int dx0, int x1, int dx1,
+	int y0, int dy0, int y1, int dy1, 
+	int z0, int dz0, int z1, int dz1 )
+{
+	int y1_index = _nx;
+	int y2_index = 2 * _nx;
+	int y3_index = 3 * _nx;
+	int y4_index = 4 * _nx;
+	int z1_index = _n12;
+	int z2_index = 2 * _n12;
+	int z3_index = 4 * _n12;
+	int z4_index = 4 * _n12;
+
+	for (int z = z0; z < z1; ++z) {
+		for (int y = y0; y < y1; ++y) {
+			int ii = y * _nx + _n12 * z + x0;
+#pragma omp simd
+			for (int x = x0; x < x1; ++x, ++ii) {
+				float p1_val = p1_global[ii];
+				p0_global[ii] = vel_global[ii] * (
+					coeffs[C0] * p1_val +
+					coeffs[CX1] * (p1_global[ii-1] + p1_global[ii+1]) +
+					coeffs[CX2] * (p1_global[ii-2] + p1_global[ii+2]) +
+					coeffs[CX3] * (p1_global[ii-3] + p1_global[ii+3]) +
+					coeffs[CX4] * (p1_global[ii-4] + p1_global[ii+4]) +
+					coeffs[CY1] * (p1_global[ii-y1_index] + p1_global[ii+y1_index]) +
+					coeffs[CY2] * (p1_global[ii-y2_index] + p1_global[ii+y2_index]) +
+					coeffs[CY3] * (p1_global[ii-y3_index] + p1_global[ii+y3_index]) +
+					coeffs[CY4] * (p1_global[ii-y4_index] + p1_global[ii+y4_index]) +
+					coeffs[CZ1] * (p1_global[ii-z1_index] + p1_global[ii+z1_index]) +
+					coeffs[CZ2] * (p1_global[ii-z2_index] + p1_global[ii+z2_index]) +
+					coeffs[CZ3] * (p1_global[ii-z3_index] + p1_global[ii+z3_index]) +
+					coeffs[CZ4] * (p1_global[ii-z4_index] + p1_global[ii+z4_index])) +
+					p1_val + p1_val - p0_global[ii];
+			}
+		}
+	}
+}
+
+void cpuProp::co_cilksimd(int t0, int t1, 
+	int x0, int dx0, int x1, int dx1,
+	int y0, int dy0, int y1, int dy1, 
+	int z0, int dz0, int z1, int dz1 )
+{
+  int dt = t1 - t0, dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+  int i;
+
+  // Divide 3D Cartesian grid into chunk size and time period
+  if (dx >= c_dx_threshold && dx >= dy && dx >= dz &&
+      dx >= 2 * c_distance * dt * c_NPIECES) {
+    //divide and conquer along x direction
+    int chunk = dx / c_NPIECES;
+
+	// calculate black regions
+	tbb::task_group tg1;
+	for (i = 1; i < c_NPIECES; ++i)
+		tg1.run([=]{co_cilksimd(t0, t1,
+							   x0 + i * chunk, c_distance, x0 + (i+1) * chunk, -c_distance,
+							   y0, dy0, y1, dy1,
+							   z0, dz0, z1, dz1);});
+    /*nospawn*/co_cilksimd(t0, t1,
+                           x0 + i * chunk, c_distance, x1, -c_distance,
+                           y0, dy0, y1, dy1, 
+                           z0, dz0, z1, dz1);
+	tg1.wait();
+	tbb::task_group tg2;
+    tg2.run([=]{co_cilksimd(t0, t1, 
+                           x0, dx0, x0, c_distance,
+                           y0, dy0, y1, dy1, 
+						   z0, dz0, z1, dz1);});
+    for (i = 1; i < c_NPIECES; ++i)
+    	tg2.run([=]{co_cilksimd(t0, t1,
+                           x0 + i * chunk, -c_distance, x0 + i * chunk, c_distance,
+                           y0, dy0, y1, dy1, 
+                           z0, dz0, z1, dz1);});
+    /*nospawn*/co_cilksimd(t0, t1, 
+                           x1, -c_distance, x1, dx1,
+                           y0, dy0, y1, dy1, 
+						   z0, dz0, z1, dz1);
+	tg2.wait();
+  } else if (dy >= c_dyz_threshold && dy >= dz && dt >= 1 && dy >= 2 * c_distance * dt * c_NPIECES) {
+    //similarly divide and conquer along y direction
+    int chunk = dy / c_NPIECES;
+
+	tbb::task_group tg1;
+    for (i = 0; i < c_NPIECES - 1; ++i)
+    	tg1.run([=]{co_cilksimd(t0, t1,
+                           x0, dx0, x1, dx1,
+                           y0 + i * chunk, c_distance, y0 + (i+1) * chunk, -c_distance, 
+                           z0, dz0, z1, dz1);});
+    /*nospawn*/co_cilksimd(t0, t1,
+                           x0, dx0, x1, dx1,
+                           y0 + i * chunk, c_distance, y1, -c_distance, 
+                           z0, dz0, z1, dz1);
+	tg1.wait();
+	tbb::task_group tg2;
+    tg2.run([=]{co_cilksimd(t0, t1, 
+                           x0, dx0, x1, dx1,
+                           y0, dy0, y0, c_distance, 
+                           z0, dz0, z1, dz1);});
+    for (i = 1; i < c_NPIECES; ++i)
+    	tg2.run([=]{co_cilksimd(t0, t1,
+                           x0, dx0, x1, dx1,
+                           y0 + i * chunk, -c_distance, y0 + i * chunk, c_distance, 
+                           z0, dz0, z1, dz1);});
+    /*nospawn*/co_cilksimd(t0, t1, 
+                           x0, dx0, x1, dx1,
+                           y1, -c_distance, y1, dy1, 
+						   z0, dz0, z1, dz1);
+	tg2.wait();
+  } else if (dz >= c_dyz_threshold && dt >= 1 && dz >= 2 * c_distance * dt * c_NPIECES) {
+    //similarly divide and conquer along z
+    int chunk = dz / c_NPIECES;
+
+	tbb::task_group tg1;
+    for (i = 0; i < c_NPIECES - 1; ++i)
+    	tg1.run([=]{co_cilksimd(t0, t1,
+                           x0, dx0, x1, dx1,
+                           y0, dy0, y1, dy1,
+                           z0 + i * chunk, c_distance, z0 + (i+1) * chunk, -c_distance);});
+    /*nospawn*/co_cilksimd(t0, t1,
+                           x0, dx0, x1, dx1,
+                           y0, dy0, y1, dy1, 
+                           z0 + i * chunk, c_distance, z1, -c_distance);
+	tg1.wait();
+	tbb::task_group tg2;
+    tg2.run([=]{co_cilksimd(t0, t1, 
+                           x0, dx0, x1, dx1,
+                           y0, dy0, y1, dy1,
+                           z0, dz0, z0, c_distance);});
+    for (i = 1; i < c_NPIECES; ++i)
+    	tg2.run([=]{co_cilksimd(t0, t1,
+                           x0, dx0, x1, dx1,
+                           y0, dy0, y1, dy1,
+                           z0 + i * chunk, -c_distance, z0 + i * chunk, c_distance);});
+    /*nospawn*/co_cilksimd(t0, t1, 
+                           x0, dx0, x1, dx1,
+                           y0, dy0, y1, dy1,
+						   z1, -c_distance, z1, dz1);
+	tg2.wait();
+  }  else if (dt > c_dt_threshold) {
+    int halfdt = dt / 2;
+    //decompose over time direction
+    co_cilksimd(t0, t0 + halfdt,
+              x0, dx0, x1, dx1,
+              y0, dy0, y1, dy1, 
+              z0, dz0, z1, dz1);
+    co_cilksimd(t0 + halfdt, t1, 
+              x0 + dx0 * halfdt, dx0, x1 + dx1 * halfdt, dx1,
+              y0 + dy0 * halfdt, dy0, y1 + dy1 * halfdt, dy1, 
+              z0 + dz0 * halfdt, dz0, z1 + dz1 * halfdt, dz1);
+  } else {
+    co_basecase_simd(t0, t1, 
+                   x0, dx0, x1, dx1,
+                   y0, dy0, y1, dy1,
+                   z0, dz0, z1, dz1);
+  } 
+}
+#endif
 
 cpuProp::cpuProp(std::shared_ptr<SEP::genericIO> io){
 	storeIO(io);
@@ -139,10 +316,10 @@ void cpuProp::sourceProp(int nx, int ny, int nz, bool damp, bool getLast,
 		float *pt=p1; p1=p0; p0=pt;	
 	}
 	if(nt%2==1){
-	   float *x=new float[_n123];
-	   memcpy(x,p0,sizeof(float)*_n123);
-	   memcpy(p1,p0,sizeof(float)*_n123);
-	   memcpy(p0,x,sizeof(float)*_n123); 
+		//float *x=new float[_n123];
+		//memcpy(x,p0,sizeof(float)*_n123);
+		memcpy(p1,p0,sizeof(float)*_n123);
+		//memcpy(p0,x,sizeof(float)*_n123); 
 	}
 
 }
@@ -261,6 +438,15 @@ void cpuProp::imageAdd(float *img,  float *recField, float *srcField){
  * the array is structured as (Z, Y, X)
  */
 void cpuProp::prop(float *p0, float *p1, float *vel){
+#ifdef __COB // cache obvilious
+	p0_global = p0;
+	p1_global = p1;
+	vel_global = vel;
+	co_cilksimd(0, 1,
+		c_distance, 0, _nx - c_distance, 0,
+		c_distance, 0, _ny - c_distance, 0,
+		c_distance, 0, _nz - c_distance, 0);
+#else
 	// blocking optimization
 	// parallelize along both Z & Y dimension, instead of just Z
 	// TODO: determine the optimal tile_size
@@ -302,7 +488,7 @@ void cpuProp::prop(float *p0, float *p1, float *vel){
 				}
 			}
 	});
-
+#endif
 	// original implementation
 	//tbb::parallel_for(tbb::blocked_range<int>(4,_nz-4),
 	//	[&](const tbb::blocked_range<int>&r){

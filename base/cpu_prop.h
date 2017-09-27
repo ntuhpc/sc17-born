@@ -47,4 +47,14 @@ float _bcA,_bcB,_bcY;   //Boundary condition
 std::vector<float>  coeffs,_bound;
 long long _n123;
 FILE *myf;
+#ifdef __COB
+void co_basecase_simd(int t0, int t1, 
+	int x0, int dx0, int x1, int dx1,
+	int y0, int dy0, int y1, int dy1, 
+	int z0, int dz0, int z1, int dz1 );
+void co_cilksimd(int t0, int t1, 
+		int x0, int dx0, int x1, int dx1,
+		int y0, int dy0, int y1, int dy1, 
+		int z0, int dz0, int z1, int dz1 );
+#endif
 };
