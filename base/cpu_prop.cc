@@ -110,16 +110,17 @@ int ic=0;
 	}
 
 }
-void cpuProp::imageCondition(float *rec, float *src, float *img){
- tbb::parallel_for(tbb::blocked_range<int>(0,_n123),[&](
-  const tbb::blocked_range<int>&r){
-#pragma omp simd
-  for(int  i=r.begin(); i!=r.end(); ++i){
-		img[i]+=src[i]*rec[i];
-	}
 
-});
+void cpuProp::imageCondition(float *rec, float *src, float *img) {
+	tbb::parallel_for(tbb::blocked_range<int>(0, _n123, 80),
+			[&](const tbb::blocked_range<int>&r) {
+#pragma omp simd
+				for (int i = r.begin(); i != r.end(); ++i) {
+					img[i] += src[i] * rec[i];
+				}
+			});
 }
+
 void cpuProp::sourceProp(int nx, int ny, int nz, bool damp, bool getLast,
 	float *p0, float *p1, int jts, int npts, int nt){
 
@@ -161,71 +162,66 @@ float en= tbb::parallel_reduce(
 
 std::cerr<<title<<":STATS:"<<en<<std::endl;
 }
-void cpuProp::damp(float *p0,float *p1){
 
-     tbb::parallel_for(tbb::blocked_range<int>(4,_nz-4),[&](
-  const tbb::blocked_range<int>&r){
-  for(int  i3=r.begin(); i3!=r.end(); ++i3){
-		int edge1=std::min(i3-4,_nz-4-i3);
-		for(int i2=4; i2 < _ny-4; i2++) {
-			int edge2=std::min(edge1,std::min(i2-4,_ny-4-i2));
-			int ii=i2*_nx+4+_n12*i3;
-			//int ii_end = i2 * _nx + _nx - 4 + _n12 * i3;
+void cpuProp::damp(float *p0,float *p1) {
+	tbb::parallel_for(tbb::blocked_range<int>(4,_nz-4),
+			[&](const tbb::blocked_range<int>&r){
+				for (int i3 = r.begin(), i3_end = r.end(); i3 < i3_end; ++i3) {
+					int edge1=std::min(i3-4,_nz-4-i3);
+					for (int i2 = 4, i2_end = _ny - 4; i2 < i2_end; ++i2) {
+						int edge2=std::min(edge1,std::min(i2-4,_ny-4-i2));
+						int ii=i2*_nx+4+_n12*i3;
 #pragma omp simd
-			for(int i1=4; i1 < _nx-4; i1++,ii++) {
-				int edge=std::min(edge2,std::min(i1-4,_nx-4-i1));
-				if(edge>=0 && edge < _bound.size()) {
-					float bound_val = _bound[edge];
-					p0[ii]*=bound_val;
-					p1[ii]*=bound_val;
+						for (int i1 = 4, i1_end = _nx - 4; i1 < i1_end; ++i1, ++ii) {
+							int edge=std::min(edge2,std::min(i1-4,_nx-4-i1));
+							if (edge>=0 && edge < _bound.size()) {
+								float bound_val = _bound[edge];
+								p0[ii] *= bound_val;
+								p1[ii] *= bound_val;
+							}
+						}
+					}
 				}
-			}
-		}
-	}
-});
-}
-void cpuProp::injectSource(int id, int ii, float *p){
-   
-   if(id+7 >= _ntSrc)  return;
-	for(int i=0; i < _nptsS; i++) {
-
-		p[_locsS[i]]+=_dir/(float)_jt*(
-			_tableS[ii][0]*_sourceV[_ntSrc*i+id]+
-			_tableS[ii][1]*_sourceV[_ntSrc*i+id+1]+
-			_tableS[ii][2]*_sourceV[_ntSrc*i+id+2]+
-			_tableS[ii][3]*_sourceV[_ntSrc*i+id+3]+
-			_tableS[ii][4]*_sourceV[_ntSrc*i+id+4]+
-			_tableS[ii][5]*_sourceV[_ntSrc*i+id+5]+
-			_tableS[ii][6]*_sourceV[_ntSrc*i+id+6]+
-			_tableS[ii][7]*_sourceV[_ntSrc*i+id+7]);
-			
-
-			
-	}
-	
-}
-void cpuProp::injectReceivers(int id, int ii, float *p){
-
-
-   if(id+7 >= _ntRec)  return;
-float sc=(float)_dir/(float) _jt;
-     tbb::parallel_for(tbb::blocked_range<int>(0,_nRecs),[&](
-  const tbb::blocked_range<int>&r){
-  for(int  i=r.begin(); i!=r.end(); ++i){
-		p[_locsR[i]]+=sc*(
-			_tableD[ii][0]*_rec[_ntRec*i+id]+
-			_tableD[ii][1]*_rec[_ntRec*i+id+1]+
-			_tableD[ii][2]*_rec[_ntRec*i+id+2]+
-			_tableD[ii][3]*_rec[_ntRec*i+id+3]+
-			_tableD[ii][4]*_rec[_ntRec*i+id+4]+
-			_tableD[ii][5]*_rec[_ntRec*i+id+5]+
-			_tableD[ii][6]*_rec[_ntRec*i+id+6]+
-			_tableD[ii][7]*_rec[_ntRec*i+id+7]);
-
-
-	}
 	});
 }
+
+void cpuProp::injectSource(int id, int ii, float *p){
+	if(id+7 >= _ntSrc)  return;
+	for(int i = 0; i < _nptsS; i++) {
+		int index = _ntSrc * i + id;
+		p[_locsS[i]]+=_dir/(float)_jt*(
+			_tableS[ii][0]*_sourceV[index]+
+			_tableS[ii][1]*_sourceV[index+1]+
+			_tableS[ii][2]*_sourceV[index+2]+
+			_tableS[ii][3]*_sourceV[index+3]+
+			_tableS[ii][4]*_sourceV[index+4]+
+			_tableS[ii][5]*_sourceV[index+5]+
+			_tableS[ii][6]*_sourceV[index+6]+
+			_tableS[ii][7]*_sourceV[index+7]);
+	}
+}
+
+void cpuProp::injectReceivers(int id, int ii, float *p){
+	if(id+7 >= _ntRec)  return;
+	float sc=(float)_dir/(float) _jt;
+	tbb::parallel_for(tbb::blocked_range<int>(0,_nRecs, 80),
+			[&](const tbb::blocked_range<int>&r){
+#pragma omp simd
+				for(int i=r.begin(); i!=r.end(); ++i){
+					int index = _ntRec * i + id;
+					p[_locsR[i]]+=sc*(
+						_tableD[ii][0]*_rec[index]+
+						_tableD[ii][1]*_rec[index+1]+
+						_tableD[ii][2]*_rec[index+2]+
+						_tableD[ii][3]*_rec[index+3]+
+						_tableD[ii][4]*_rec[index+4]+
+						_tableD[ii][5]*_rec[index+5]+
+						_tableD[ii][6]*_rec[index+6]+
+						_tableD[ii][7]*_rec[index+7]);
+				}
+	});
+}
+
 void cpuProp::dataExtract(int id, int ii, float *p){
 
 
