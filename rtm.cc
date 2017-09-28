@@ -5,6 +5,7 @@
 #include "source_func_3d.h"
 #include "rtm_zero_op_3d.h"
 #include "cpu_prop.h"
+#include "gpu_prop.h"
 
 main(int argc, char **argv){
 
@@ -34,7 +35,8 @@ main(int argc, char **argv){
 	std::vector<int> rand_vec(1.0);
 
 	bool encode=false;
-	std::shared_ptr<cpuProp> prop(new cpuProp(io));
+	//std::shared_ptr<cpuProp> prop(new cpuProp(io));
+	std::shared_ptr<gpuProp> prop(new gpuProp(io));
 
 	std::shared_ptr<rtm_zero_op> op(new
 		rtm_zero_op(pars,prop,vel,wavelet,data,image,aper,true,encode,rand_vec,true));

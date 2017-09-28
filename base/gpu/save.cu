@@ -2,47 +2,47 @@
 //#include "cutil_math.h"
 #include "gpu_finite_3d.h"
 #include <stdlib.h>
-#include "sep3d.h"
-#include "seplib.h"  
+//#include "sep3d.h"
+//#include "seplib.h"  
 #include "cudaErrors.cu"
 #include "wave_fkernel.3d8o.cu"
 
-void setup_cuda(int ngpus, int argc, char **argv){
-  n_gpus=ngpus;
-  fprintf(stderr,"Today, we are using %d GPUs; specifically: \n",n_gpus);
-  int dr;
-
-  for(int i=0; i<n_gpus; i++) device[i]=i;
-
-  for(int i=0; i<n_gpus; i++){
-    cudaDeviceSynchronize();
-
-    cudaSetDevice(device[i]);
-    cudaDeviceProp properties;
-    cudaGetDeviceProperties(&properties,device[i]);
-    cudaDriverGetVersion(&dr);
-
-    fprintf(stderr,"  GPU %s (%d),",properties.name, device[i]);
-    if(properties.unifiedAddressing) fprintf(stderr," UVA initiated,");
-    else fprintf(stderr," UVA not working ");
-    fprintf(stderr," driver %d\n",dr);
-
-    //Enable P2P memcopies between GPUs
-    if(n_gpus > 1){
-      for(int j=0; j<n_gpus; j++){
-        if(i==j) continue;
-        int peer_access_available=0;
-        cudaDeviceCanAccessPeer( &peer_access_available,device[i],device[j]);
-        if(peer_access_available){
-	  //fprintf(stderr,"Make the GPUs talk %d %d\n",device[i],device[j]);
-          cudaDeviceEnablePeerAccess(device[j],0);
-        }
-      }
-    }
-
-  }
-
-}
+//void setup_cuda(int ngpus, int argc, char **argv){
+//  n_gpus=ngpus;
+//  fprintf(stderr,"Today, we are using %d GPUs; specifically: \n",n_gpus);
+//  int dr;
+//
+//  for(int i=0; i<n_gpus; i++) device[i]=i;
+//
+//  for(int i=0; i<n_gpus; i++){
+//    cudaDeviceSynchronize();
+//
+//    cudaSetDevice(device[i]);
+//    cudaDeviceProp properties;
+//    cudaGetDeviceProperties(&properties,device[i]);
+//    cudaDriverGetVersion(&dr);
+//
+//    fprintf(stderr,"  GPU %s (%d),",properties.name, device[i]);
+//    if(properties.unifiedAddressing) fprintf(stderr," UVA initiated,");
+//    else fprintf(stderr," UVA not working ");
+//    fprintf(stderr," driver %d\n",dr);
+//
+//    //Enable P2P memcopies between GPUs
+//    if(n_gpus > 1){
+//      for(int j=0; j<n_gpus; j++){
+//        if(i==j) continue;
+//        int peer_access_available=0;
+//        cudaDeviceCanAccessPeer( &peer_access_available,device[i],device[j]);
+//        if(peer_access_available){
+//	  //fprintf(stderr,"Make the GPUs talk %d %d\n",device[i],device[j]);
+//          cudaDeviceEnablePeerAccess(device[j],0);
+//        }
+//      }
+//    }
+//
+//  }
+//
+//}
 
 void process_error( const cudaError_t &error, char *string=0, bool verbose=false )
 {

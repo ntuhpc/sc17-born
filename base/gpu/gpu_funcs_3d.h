@@ -3,7 +3,8 @@
 //dont forget the img kernel bits later!
 extern "C"{
 
-void setup_cuda(int device, int argc, char **argv);//no change needed
+//void setup_cuda(int device, int argc, char **argv);//no change needed
+void setup_cuda(int device);//no change needed
 
 void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0, float *p1, int jt, int npts,int nt);
 

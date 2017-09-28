@@ -12,8 +12,8 @@ int ntblock_internal;
 float *source_buf;
 int npts_internal,source_blocked,ntsource_internal;
 
-
-void setup_cuda(int ngpus, int argc, char **argv){
+//void setup_cuda(int ngpus, int argc, char **argv){
+void setup_cuda(int ngpus){
   n_gpus=ngpus;
   fprintf(stderr,"Today, we are using %d GPUs; specifically: \n",n_gpus);
   int dr;
@@ -68,17 +68,19 @@ void process_error( const cudaError_t &error, char *string=0, bool verbose=false
 
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc,float *p){
   int ix=blockIdx.x*blockDim.x+threadIdx.x;
-  p[srcgeom_gpu0[ix]]+=dir_gpu*(
-  sinc_s_table[isinc*nsinc_gpu]*  source_gpu0[ntblock_gpu*ix+it]+
-  sinc_s_table[isinc*nsinc_gpu+1]*source_gpu0[ntblock_gpu*ix+it+1]+
-  sinc_s_table[isinc*nsinc_gpu+2]*source_gpu0[ntblock_gpu*ix+it+2]+
-  sinc_s_table[isinc*nsinc_gpu+3]*source_gpu0[ntblock_gpu*ix+it+3]+
-  sinc_s_table[isinc*nsinc_gpu+4]*source_gpu0[ntblock_gpu*ix+it+4]+
-  sinc_s_table[isinc*nsinc_gpu+5]*source_gpu0[ntblock_gpu*ix+it+5]+
-  sinc_s_table[isinc*nsinc_gpu+6]*source_gpu0[ntblock_gpu*ix+it+6]+
-  sinc_s_table[isinc*nsinc_gpu+7]*source_gpu0[ntblock_gpu*ix+it+7]);
+  if (it + 7 < ntblock_gpu) { // TODO: check correctness
+    p[srcgeom_gpu0[ix]]+=dir_gpu*(
+    sinc_s_table[isinc*nsinc_gpu]*  source_gpu0[ntblock_gpu*ix+it]  +
+    sinc_s_table[isinc*nsinc_gpu+1]*source_gpu0[ntblock_gpu*ix+it+1]+
+    sinc_s_table[isinc*nsinc_gpu+2]*source_gpu0[ntblock_gpu*ix+it+2]+
+    sinc_s_table[isinc*nsinc_gpu+3]*source_gpu0[ntblock_gpu*ix+it+3]+
+    sinc_s_table[isinc*nsinc_gpu+4]*source_gpu0[ntblock_gpu*ix+it+4]+
+    sinc_s_table[isinc*nsinc_gpu+5]*source_gpu0[ntblock_gpu*ix+it+5]+
+    sinc_s_table[isinc*nsinc_gpu+6]*source_gpu0[ntblock_gpu*ix+it+6]+
+    sinc_s_table[isinc*nsinc_gpu+7]*source_gpu0[ntblock_gpu*ix+it+7]);
+  }
 }
-extern "C" __global__ void new_src_inject2_kernel(int it, int isinc,float *p,float *source_gpu1){
+extern "C" __global__ void new_src_inject2_kernel(int it, int isinc,float *p){
   int j=blockIdx.y*blockDim.y+threadIdx.y;
   int k=blockIdx.x*blockDim.x+threadIdx.x;
   int i=k+n1gpu*j;
@@ -88,7 +90,7 @@ extern "C" __global__ void new_src_inject2_kernel(int it, int isinc,float *p,flo
       sinc_s_table[isinc*nsinc_gpu]*  source_gpu0[ntblock_gpu*i+it]+
       sinc_s_table[isinc*nsinc_gpu+1]*source_gpu0[ntblock_gpu*i+it+1]+
       sinc_s_table[isinc*nsinc_gpu+2]*source_gpu0[ntblock_gpu*i+it+2]+
-      sinc_s_table[isinc*nsinc_gpu+3]*source_gpu0[ntblock_gpu*i+it+3] +
+      sinc_s_table[isinc*nsinc_gpu+3]*source_gpu0[ntblock_gpu*i+it+3]+
       sinc_s_table[isinc*nsinc_gpu+4]*source_gpu0[ntblock_gpu*i+it+4]+
       sinc_s_table[isinc*nsinc_gpu+5]*source_gpu0[ntblock_gpu*i+it+5]+
       sinc_s_table[isinc*nsinc_gpu+6]*source_gpu0[ntblock_gpu*i+it+6]+
@@ -169,7 +171,9 @@ extern "C" __global__ void img_kernel( float* img, float*dat, float*src){
   int addr= ig + n1gpu * jg;
   int stride = n1gpu*n2gpu;
   for(int iy=0; iy<n3gpu; iy++){
-    img[addr]+=.000001*dat[addr]*src[addr];
+    //img[addr]+=.000001*dat[addr]*src[addr];
+	//printf("%d %d %d\n", img[addr], dat[addr], src[addr]);
+    img[addr]+=dat[addr]*src[addr];
     addr+=stride;
   }
 }
@@ -186,7 +190,6 @@ extern "C" __global__ void img_add_kernel( float* img, float*rec_field, float *s
 void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0, float *p1, int jt, int npts,int nt){
 
   //Propagate the source wavefield and return the final two 3D wavefield slices
-
   float *ptemp;
   float *src_p0[n_gpus],*src_p1[n_gpus];
 
@@ -362,344 +365,347 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0, fl
     cudaFree(src_p0[i]);
     cudaFree(src_p1[i]);
   }
-  cudaFree(source_gpu);
-  cudaFree(srcgeom_gpu);
+  //cudaFree(source_gpu);
+  //cudaFree(srcgeom_gpu);
 
 }
+
 void rtm_forward(int n1, int n2, int n3, int jt, float *img, float *dat, int npts_src, int nt,int nt_big, int rec_nx, int rec_ny){
-
-
-
-if(1==1){
-
-  //Born modelling over input image
-  float *src_p0[n_gpus], *src_p1[n_gpus], *data_p0[n_gpus], *data_p1[n_gpus], *img_gpu[n_gpus];
-  float *ptemp, *ptemp2;
-
-  cudaError_t error = cudaSuccess;
-
-  int n3_total=n3;
-  n3=(n3-2*radius)/n_gpus + 2*radius;
-
-  int dir=1;
-
-  int n3s=n3-2*radius;
-
-  int nblocks1=(n1-2*FAT)/BLOCKZ_SIZE; 
-  int nblocks2=(n2-2*FAT)/BLOCKX_SIZE; 
-  //int nblocks3=(n3-2*FAT)/BLOCKY_SIZE; 
-
-  dim3 dimGrid(nblocks1,nblocks2);
-  dim3 dimBlock(16, 16);
-  
-  //dim3 dimGridx((int)ceilf(1.*n1/BLOCKX_SIZE),(int)ceilf(1.*n2/BLOCKY_SIZE));
-  dim3 dimGridx((int)ceilf(1.*n1/BLOCKX_SIZE),(int)ceilf(1.*n2/BLOCKY_SIZE));
-fprintf(stderr,"CEHCK GRID %d %d %d %d  \n",dimBlock.x,dimBlock.y,dimGridx.x,dimGridx.y);
-
-
-
-  cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
-  cudaEvent_t start,stop;
-
-  cudaSetDevice(device[0]);
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-
-  int offset_internal[n_gpus];
-  int start3[n_gpus],end3[n_gpus];
-
-  for(int i=0; i<n_gpus; i++){
-    cudaSetDevice(device[i]);
-    cudaStreamCreate(&stream_halo[i]);
-    cudaStreamCreate(&stream_internal[i]);
-
-    offset_internal[i]=offset;
-    if(i > 0) offset_internal[i] += n1*n2*radius;
-
-    start3[i] = i*(n3-2*radius) + 2*radius;
-    end3[i] = (i+1)*(n3-2*radius);
-  }
-
-  start3[0]=radius;
-  end3[n_gpus-1]=n_gpus*(n3-2*radius);
-
-  for(int i=0; i<n_gpus; i++){
-
-    cudaSetDevice(device[i]);
-    cudaMalloc((void**) &src_p0[i], (n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMalloc((void**) &src_p1[i], (n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMalloc((void**) &data_p0[i],(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMalloc((void**) &data_p1[i],(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMalloc((void**) &img_gpu[i], n1*n2*n3*sizeof(float));
-
-    cudaMemset(data_p0[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMemset(data_p1[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMemset(src_p0[i],  0,(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMemset(src_p1[i],  0,(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMemset(img_gpu[i], 0,n1*n2*n3*sizeof(float));
-
-    cudaMemcpy( img_gpu[i]/*+radius*n1*n2*/, img+i*n1*n2*(n3-2*radius), n1*n2*(n3/*-2*radius*/)*sizeof(float), cudaMemcpyHostToDevice);
-    //DONT DELETE need the -2*r gone to be multi-gpu invariant
-    //cudaMemcpy( img_gpu[i]+radius*n1*n2, img+i*n1*n2*(n3-2*radius), n1*n2*(n3-2*radius)*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpyToSymbol(dir_gpu, &dir, sizeof(float));
-  }
-
-  int offset_snd_h1=lead_pad+n1*n2*radius;
-  int offset_snd_h2=lead_pad+n1*n2*(n3-2*radius);
-  int offset_rcv_h1=lead_pad+0;
-  int offset_rcv_h2=lead_pad+n1*n2*(n3-2*radius+radius);
-
-  int offset_cmp_h1=offset;
-  int offset_cmp_h2=lead_pad+radius+radius*n1+n1*n2*(n3-radius-radius);
-
-  cudaSetDevice(device[0]);
-  cudaEventRecord(start,0);
-  long long iblock=0;
-  int icycle=-1;
-  //zero_data<<<dimGridx,dimBlock,0,stream_internal[0]>>>(data_p0[0]);
-/*
- float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
-      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
-     srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
-free(temp);
-*/
-
-  for(int it=0; it < nt; it++){
-    int id=it/jt;
-    int ii=it-id*jt;
-    int id_block=id-((int)(id/ntblock_internal))*ntblock_internal;
-    if(it%100==10){
-  //   fprintf(stderr,"WRITING WAVEFIELD %d %d %d \n",n1,n2,n3_total);
-  //   writeWavefield("src.H",src_p0,n3s,n_gpus,n1,n2,n3_total,radius);
-   //       writeWavefield("dat.H",data_p0,n3s,n_gpus,n1,n2,n3_total,radius);
-
-    
-    
-    }
-
-    for(int i=0; i<n_gpus; i++){
-      cudaSetDevice(device[i]);
-      if(i>0){
-        wave_kernel_adj<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h1, data_p1[i]+offset_cmp_h1, data_p0[i]+offset_cmp_h1, velocity[i]+offset_cmp_h1, radius, 2*radius);
-        wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h1, src_p1[i]+offset_cmp_h1, src_p0[i]+offset_cmp_h1, velocity[i]+offset_cmp_h1, radius, 2*radius);
-      } 
-      if(i<n_gpus-1){
-        wave_kernel_adj<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h2, data_p1[i]+offset_cmp_h2, data_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, (n3-radius)-radius, n3-radius);
-        wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h2, src_p1[i]+offset_cmp_h2, src_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, (n3-radius)-radius, n3-radius);
-      }
-      cudaStreamQuery(stream_halo[i]);
-    }
-    
-    if(ii==0) {
-      icycle++;
-      if(icycle%ntblock_internal==0){
-        load_source(id);
-      }
-    }
-
-    for(int i=0; i<n_gpus; i++){
-      cudaSetDevice(device[i]);
-
-      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
-      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
-      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(src_p0[i], src_p1[i], start3[i], end3[i], i, n_gpus);
-
-      wave_kernel_adj<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i]+offset_internal[i], data_p1[i]+offset_internal[i], data_p0[i]+offset_internal[i], velocity[i]+offset_internal[i], start3[i], end3[i]);
-
-      wave_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(src_p0[i]+offset_internal[i], src_p1[i]+offset_internal[i], src_p0[i]+offset_internal[i], velocity[i]+offset_internal[i], start3[i], end3[i]);
-
-    fprintf(stderr,"in m0odeling %d of %d %d \n",it,nt,id_block);
-
-      if(i==shot_gpu) {
-      
-         if(npts_src<100) new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(icycle ,ii,src_p0[i]+lead_pad);
-         
-         else{
-           new_src_inject2_kernel              <<<dimGridx,dimBlock,0,stream_internal[i]>>>(icycle ,ii,src_p0[i]+lead_pad,source_gpu);
-         }
-      }
-    }
-    
-if(1==3){
- float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
-      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
-      srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
-free(temp);
+//
+//
+//
+//if(1==1){
+//
+//  //Born modelling over input image
+//  float *src_p0[n_gpus], *src_p1[n_gpus], *data_p0[n_gpus], *data_p1[n_gpus], *img_gpu[n_gpus];
+//  float *ptemp, *ptemp2;
+//
+//  cudaError_t error = cudaSuccess;
+//
+//  int n3_total=n3;
+//  n3=(n3-2*radius)/n_gpus + 2*radius;
+//
+//  int dir=1;
+//
+//  int n3s=n3-2*radius;
+//
+//  int nblocks1=(n1-2*FAT)/BLOCKZ_SIZE; 
+//  int nblocks2=(n2-2*FAT)/BLOCKX_SIZE; 
+//  //int nblocks3=(n3-2*FAT)/BLOCKY_SIZE; 
+//
+//  dim3 dimGrid(nblocks1,nblocks2);
+//  dim3 dimBlock(16, 16);
+//  
+//  //dim3 dimGridx((int)ceilf(1.*n1/BLOCKX_SIZE),(int)ceilf(1.*n2/BLOCKY_SIZE));
+//  dim3 dimGridx((int)ceilf(1.*n1/BLOCKX_SIZE),(int)ceilf(1.*n2/BLOCKY_SIZE));
+//fprintf(stderr,"CEHCK GRID %d %d %d %d  \n",dimBlock.x,dimBlock.y,dimGridx.x,dimGridx.y);
+//
+//
+//
+//  cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
+//  cudaEvent_t start,stop;
+//
+//  cudaSetDevice(device[0]);
+//  cudaEventCreate(&start);
+//  cudaEventCreate(&stop);
+//
+//  int offset_internal[n_gpus];
+//  int start3[n_gpus],end3[n_gpus];
+//
+//  for(int i=0; i<n_gpus; i++){
+//    cudaSetDevice(device[i]);
+//    cudaStreamCreate(&stream_halo[i]);
+//    cudaStreamCreate(&stream_internal[i]);
+//
+//    offset_internal[i]=offset;
+//    if(i > 0) offset_internal[i] += n1*n2*radius;
+//
+//    start3[i] = i*(n3-2*radius) + 2*radius;
+//    end3[i] = (i+1)*(n3-2*radius);
+//  }
+//
+//  start3[0]=radius;
+//  end3[n_gpus-1]=n_gpus*(n3-2*radius);
+//
+//  for(int i=0; i<n_gpus; i++){
+//
+//    cudaSetDevice(device[i]);
+//    cudaMalloc((void**) &src_p0[i], (n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMalloc((void**) &src_p1[i], (n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMalloc((void**) &data_p0[i],(n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMalloc((void**) &data_p1[i],(n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMalloc((void**) &img_gpu[i], n1*n2*n3*sizeof(float));
+//
+//    cudaMemset(data_p0[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMemset(data_p1[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMemset(src_p0[i],  0,(n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMemset(src_p1[i],  0,(n1*n2*n3+lead_pad)*sizeof(float));
+//    cudaMemset(img_gpu[i], 0,n1*n2*n3*sizeof(float));
+//
+//    cudaMemcpy( img_gpu[i]/*+radius*n1*n2*/, img+i*n1*n2*(n3-2*radius), n1*n2*(n3/*-2*radius*/)*sizeof(float), cudaMemcpyHostToDevice);
+//    //DONT DELETE need the -2*r gone to be multi-gpu invariant
+//    //cudaMemcpy( img_gpu[i]+radius*n1*n2, img+i*n1*n2*(n3-2*radius), n1*n2*(n3-2*radius)*sizeof(float), cudaMemcpyHostToDevice);
+//    cudaMemcpyToSymbol(dir_gpu, &dir, sizeof(float));
+//  }
+//
+//  int offset_snd_h1=lead_pad+n1*n2*radius;
+//  int offset_snd_h2=lead_pad+n1*n2*(n3-2*radius);
+//  int offset_rcv_h1=lead_pad+0;
+//  int offset_rcv_h2=lead_pad+n1*n2*(n3-2*radius+radius);
+//
+//  int offset_cmp_h1=offset;
+//  int offset_cmp_h2=lead_pad+radius+radius*n1+n1*n2*(n3-radius-radius);
+//
+//  cudaSetDevice(device[0]);
+//  cudaEventRecord(start,0);
+//  long long iblock=0;
+//  int icycle=-1;
+//  //zero_data<<<dimGridx,dimBlock,0,stream_internal[0]>>>(data_p0[0]);
+///*
+// float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
+//      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
+//     srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
+//free(temp);
+//*/
+//
+//  for(int it=0; it < nt; it++){
+//    int id=it/jt;
+//    int ii=it-id*jt;
+//    int id_block=id-((int)(id/ntblock_internal))*ntblock_internal;
+//    if(it%100==10){
+//  //   fprintf(stderr,"WRITING WAVEFIELD %d %d %d \n",n1,n2,n3_total);
+//  //   writeWavefield("src.H",src_p0,n3s,n_gpus,n1,n2,n3_total,radius);
+//   //       writeWavefield("dat.H",data_p0,n3s,n_gpus,n1,n2,n3_total,radius);
+//
+//    
+//    
+//    }
+//
+//    for(int i=0; i<n_gpus; i++){
+//      cudaSetDevice(device[i]);
+//      if(i>0){
+//        wave_kernel_adj<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h1, data_p1[i]+offset_cmp_h1, data_p0[i]+offset_cmp_h1, velocity[i]+offset_cmp_h1, radius, 2*radius);
+//        wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h1, src_p1[i]+offset_cmp_h1, src_p0[i]+offset_cmp_h1, velocity[i]+offset_cmp_h1, radius, 2*radius);
+//      } 
+//      if(i<n_gpus-1){
+//        wave_kernel_adj<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h2, data_p1[i]+offset_cmp_h2, data_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, (n3-radius)-radius, n3-radius);
+//        wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h2, src_p1[i]+offset_cmp_h2, src_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, (n3-radius)-radius, n3-radius);
+//      }
+//      cudaStreamQuery(stream_halo[i]);
+//    }
+//    
+//    if(ii==0) {
+//      icycle++;
+//      if(icycle%ntblock_internal==0){
+//        load_source(id);
+//      }
+//    }
+//
+//    for(int i=0; i<n_gpus; i++){
+//      cudaSetDevice(device[i]);
+//
+//      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
+//      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
+//      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(src_p0[i], src_p1[i], start3[i], end3[i], i, n_gpus);
+//
+//      wave_kernel_adj<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i]+offset_internal[i], data_p1[i]+offset_internal[i], data_p0[i]+offset_internal[i], velocity[i]+offset_internal[i], start3[i], end3[i]);
+//
+//      wave_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(src_p0[i]+offset_internal[i], src_p1[i]+offset_internal[i], src_p0[i]+offset_internal[i], velocity[i]+offset_internal[i], start3[i], end3[i]);
+//
+//    fprintf(stderr,"in m0odeling %d of %d %d \n",it,nt,id_block);
+//
+//      if(i==shot_gpu) {
+//      
+//         if(npts_src<100) new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(icycle ,ii,src_p0[i]+lead_pad);
+//         
+//         else{
+//           new_src_inject2_kernel              <<<dimGridx,dimBlock,0,stream_internal[i]>>>(icycle ,ii,src_p0[i]+lead_pad,source_gpu);
+//         }
+//      }
+//    }
+//    
+//if(1==3){
+// float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
+//      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
+//      srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
+//free(temp);
+//}
+//    for(int i=0; i<n_gpus-1; i++){
+//      cudaMemcpyPeerAsync(data_p0[i+1]+offset_rcv_h1,i+1,data_p0[i]+offset_snd_h2,i,n1*n2*radius*sizeof(float),stream_halo[i]);
+//      cudaMemcpyPeerAsync(src_p0[i+1]+offset_rcv_h1,i+1,src_p0[i]+offset_snd_h2,i,n1*n2*radius*sizeof(float),stream_halo[i]);
+//    }
+//    for(int i=0; i<n_gpus-1; i++){
+//      cudaSetDevice(device[i]);
+//      cudaStreamSynchronize(stream_halo[i]);
+//    }
+//    for(int i=1; i<n_gpus; i++){
+//      cudaMemcpyPeerAsync(data_p0[i-1]+offset_rcv_h2,i-1,data_p0[i]+offset_snd_h1,i,n1*n2*radius*sizeof(float),stream_halo[i]);
+//      cudaMemcpyPeerAsync(src_p0[i-1]+offset_rcv_h2,i-1,src_p0[i]+offset_snd_h1,i,n1*n2*radius*sizeof(float),stream_halo[i]);
+//    }
+//    for(int i=0; i<n_gpus; i++){ 
+//      cudaSetDevice(device[i]);
+//      cudaSetDevice(device[i]);
+//      cudaStreamSynchronize(stream_internal[i]);
+//    }
+//    for(int i=0; i<n_gpus; i++){
+//      cudaSetDevice(device[i]);
+//      //if(it%jt==0) img_add_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i]+offset_snd_h1,data_p0[i]+offset_snd_h1,src_p0[i]+offset_snd_h1);
+//      if(it%jt==0) img_add_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i],data_p0[i],src_p0[i]);
+//      //if(it%jt==0) img_add_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i]+offset_internal[i]-offset,data_p0[i]+offset_internal[i]-offset,src_p0[i]+offset_internal[i]-offset); //works for multis
+//    }
+//    fprintf(stderr,"in 2modeling %d of %d %d \n",it,nt,id_block);
+//
+//    for(int i=0; i<n_gpus; i++){
+//      cudaSetDevice(device[i]);
+//      cudaStreamSynchronize(stream_internal[i]);
+//      cudaDeviceSynchronize();
+//    }
+//
+//    cudaSetDevice(device[0]);
+//
+//    if(icycle==ntblock_internal){
+//      icycle=0;
+//   
+//      float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
+//      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
+//      srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
+//    float sm=0;
+//      for(int k=0; k <rec_nx*rec_ny*ntblock_internal; k++){
+//        sm+=fabs(temp[k]);
+//      }
+//      int itr=0;
+//      for(int iy=0; iy < rec_ny; iy++){
+//        for(int ix=0; ix < rec_nx; ix++,itr++){
+//           memcpy(&dat[nt_big*itr+iblock*ntblock_internal],&temp[(ntblock_internal+7)*itr],ntblock_internal*sizeof(float));
+//        }
+//      }
+//      iblock++;
+//      move_zero_data<<<dimGridx,dimBlock,0,stream_internal[0]>>>(data_p0[0]);
+//    //  cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
+//    //  srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
+//
+//      free(temp);
+//    }
+//    new_data_extract_kernel<<<dimGridx,dimBlock,0,stream_internal[0]>>>(icycle ,ii,data_p0[0]/*,datageom_gpu,data_gpu+offset_snd_h1*/);
+//    fprintf(stderr,"in modelaxing %d of %d %d \n",it,nt,id_block);
+//
+//    for(int i=0; i<n_gpus; i++){
+//      cudaSetDevice(i);
+//      cudaDeviceSynchronize();
+//      ptemp2=src_p1[i]; src_p1[i]=src_p0[i]; src_p0[i]=ptemp2;
+//      ptemp=data_p1[i]; data_p1[i]=data_p0[i]; data_p0[i]=ptemp;
+//    }
+//   /*
+//    fprintf(stderr,"in modelin2g %d of %d %d \n",it,nt,id_block);
+// float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
+//      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
+//      srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
+//free(temp);
+//
+//     writeWavefield("src.H",src_p0,n3s,n_gpus,n1,n2,n3_total,radius);
+//    seperr("");
+//    */
+//  }
+//
+//  //error = cudaGetLastError();
+//  //process_error( error, "kernel" );
+//  int ic=0;
+//  if(nt_big!=ntblock_internal*iblock){
+//     float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
+//     cudaMemcpy(temp, data_gpu, 
+//       (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), 
+//         cudaMemcpyDeviceToHost);
+//   
+//     int itr=0;
+//     for(int iy=0; iy < rec_ny; iy++){
+//        for(int ix=0; ix < rec_nx; ix++,itr++){
+//          memcpy(&dat[nt_big*itr+iblock*ntblock_internal],
+//           &temp[(ntblock_internal+7)*itr],(nt_big-ntblock_internal*iblock)*sizeof(float));
+//        }
+//     }
+//
+//           float sm=0;
+//      for(int k=0; k <rec_nx*rec_ny*ntblock_internal; k++){
+//        sm+=fabs(temp[k]);
+//        if(fabs(temp[k])>.000001) ic++;
+//      }
+//     free(temp);
+//   }
+//   
+//   
+//  cudaSetDevice(device[0]);
+//  cudaEventRecord(stop,0);
+//
+//  cudaDeviceSynchronize();
+//
+//  float time_total;
+//  cudaEventElapsedTime(&time_total,start,stop);
+//  fprintf(stderr,"Time for Born modelling = %f seconds \n",time_total/1000);
+//
+//  cudaEventDestroy(start);
+//  cudaEventDestroy(stop);
+//  cudaSetDevice(device[0]);
+// // cudaMemcpy(dat, data_gpu, nt_big*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
+//  for(int i=0; i<n_gpus; i++){
+//
+//    cudaSetDevice(i);
+//
+//    cudaFree(data_p0[i]);
+//
+//
+//    cudaFree(img_gpu[i]);
+//
+//    cudaFree(data_p1[i]);
+//
+//    cudaFree(src_p0[i]);
+//
+//    cudaFree(src_p1[i]);
+//
+//
+//  }
+//  cudaSetDevice(0);
+//
+//  cudaFree(data_gpu);
+//
+//  cudaFree(datageom_gpu);
+//
+//  cudaFree(source_gpu);
+//
+//  cudaFree(srcgeom_gpu);
+//
+//
+//}
+//
+//
+//
+//
 }
-    for(int i=0; i<n_gpus-1; i++){
-      cudaMemcpyPeerAsync(data_p0[i+1]+offset_rcv_h1,i+1,data_p0[i]+offset_snd_h2,i,n1*n2*radius*sizeof(float),stream_halo[i]);
-      cudaMemcpyPeerAsync(src_p0[i+1]+offset_rcv_h1,i+1,src_p0[i]+offset_snd_h2,i,n1*n2*radius*sizeof(float),stream_halo[i]);
-    }
-    for(int i=0; i<n_gpus-1; i++){
-      cudaSetDevice(device[i]);
-      cudaStreamSynchronize(stream_halo[i]);
-    }
-    for(int i=1; i<n_gpus; i++){
-      cudaMemcpyPeerAsync(data_p0[i-1]+offset_rcv_h2,i-1,data_p0[i]+offset_snd_h1,i,n1*n2*radius*sizeof(float),stream_halo[i]);
-      cudaMemcpyPeerAsync(src_p0[i-1]+offset_rcv_h2,i-1,src_p0[i]+offset_snd_h1,i,n1*n2*radius*sizeof(float),stream_halo[i]);
-    }
-    for(int i=0; i<n_gpus; i++){ 
-      cudaSetDevice(device[i]);
-      cudaSetDevice(device[i]);
-      cudaStreamSynchronize(stream_internal[i]);
-    }
-    for(int i=0; i<n_gpus; i++){
-      cudaSetDevice(device[i]);
-      //if(it%jt==0) img_add_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i]+offset_snd_h1,data_p0[i]+offset_snd_h1,src_p0[i]+offset_snd_h1);
-      if(it%jt==0) img_add_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i],data_p0[i],src_p0[i]);
-      //if(it%jt==0) img_add_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i]+offset_internal[i]-offset,data_p0[i]+offset_internal[i]-offset,src_p0[i]+offset_internal[i]-offset); //works for multis
-    }
-    fprintf(stderr,"in 2modeling %d of %d %d \n",it,nt,id_block);
 
-    for(int i=0; i<n_gpus; i++){
-      cudaSetDevice(device[i]);
-      cudaStreamSynchronize(stream_internal[i]);
-      cudaDeviceSynchronize();
-    }
+//void writeWavefield(char *tag, float **dat, int n3s,int ngpu, int n1, int n2, int n3,int edge){
+//  long long big_block;
+//  int igpu,block;
+//  long long doing,done,toDo;
+//  long long big=500*1000*1000;
+//  big_block=(long long)n1*(long long)n2 *(long long)n3;
+//  big_block=big_block/ngpu+n1*n2;
+//
+//fprintf(stderr,"CXXX %d %d %d \n",n1,n2,n3s*2);
+//  float *buf=(float*)malloc(sizeof(float*)*big_block);
+//  for(igpu=0; igpu < 2; igpu++){
+//      toDo=(long long)n1*(long long)n2*n3s;
+//     cudaMemcpy(buf,dat[igpu]+n1*n2*edge,toDo*sizeof(float),cudaMemcpyDeviceToHost);
+//     done=0;
+//     while(done < toDo){
+//       doing=toDo; if(doing > big) doing=big;
+//       block=doing;
+//       srite(tag,&buf[done],block*4);
+//       done+=doing;
+//     }
+//   }
+//   free(buf);
+//   // seperr("");
+//}
 
-    cudaSetDevice(device[0]);
-
-    if(icycle==ntblock_internal){
-      icycle=0;
-   
-      float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
-      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
-      srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
-    float sm=0;
-      for(int k=0; k <rec_nx*rec_ny*ntblock_internal; k++){
-        sm+=fabs(temp[k]);
-      }
-      int itr=0;
-      for(int iy=0; iy < rec_ny; iy++){
-        for(int ix=0; ix < rec_nx; ix++,itr++){
-           memcpy(&dat[nt_big*itr+iblock*ntblock_internal],&temp[(ntblock_internal+7)*itr],ntblock_internal*sizeof(float));
-        }
-      }
-      iblock++;
-      move_zero_data<<<dimGridx,dimBlock,0,stream_internal[0]>>>(data_p0[0]);
-    //  cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
-    //  srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
-
-      free(temp);
-    }
-    new_data_extract_kernel<<<dimGridx,dimBlock,0,stream_internal[0]>>>(icycle ,ii,data_p0[0]/*,datageom_gpu,data_gpu+offset_snd_h1*/);
-    fprintf(stderr,"in modelaxing %d of %d %d \n",it,nt,id_block);
-
-    for(int i=0; i<n_gpus; i++){
-      cudaSetDevice(i);
-      cudaDeviceSynchronize();
-      ptemp2=src_p1[i]; src_p1[i]=src_p0[i]; src_p0[i]=ptemp2;
-      ptemp=data_p1[i]; data_p1[i]=data_p0[i]; data_p0[i]=ptemp;
-    }
-   /*
-    fprintf(stderr,"in modelin2g %d of %d %d \n",it,nt,id_block);
- float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
-      cudaMemcpy(temp, data_gpu, (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
-      srite("book.H",temp,(7+ntblock_internal)*rec_nx*rec_ny*sizeof(float));
-free(temp);
-
-     writeWavefield("src.H",src_p0,n3s,n_gpus,n1,n2,n3_total,radius);
-    seperr("");
-    */
-  }
-
-  //error = cudaGetLastError();
-  //process_error( error, "kernel" );
-  int ic=0;
-  if(nt_big!=ntblock_internal*iblock){
-     float *temp=(float*)malloc(sizeof(float)*rec_nx*rec_ny*(ntblock_internal+7));
-     cudaMemcpy(temp, data_gpu, 
-       (7+ntblock_internal)*rec_nx*rec_ny*sizeof(float), 
-         cudaMemcpyDeviceToHost);
-   
-     int itr=0;
-     for(int iy=0; iy < rec_ny; iy++){
-        for(int ix=0; ix < rec_nx; ix++,itr++){
-          memcpy(&dat[nt_big*itr+iblock*ntblock_internal],
-           &temp[(ntblock_internal+7)*itr],(nt_big-ntblock_internal*iblock)*sizeof(float));
-        }
-     }
-
-           float sm=0;
-      for(int k=0; k <rec_nx*rec_ny*ntblock_internal; k++){
-        sm+=fabs(temp[k]);
-        if(fabs(temp[k])>.000001) ic++;
-      }
-     free(temp);
-   }
-   
-   
-  cudaSetDevice(device[0]);
-  cudaEventRecord(stop,0);
-
-  cudaDeviceSynchronize();
-
-  float time_total;
-  cudaEventElapsedTime(&time_total,start,stop);
-  fprintf(stderr,"Time for Born modelling = %f seconds \n",time_total/1000);
-
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
-  cudaSetDevice(device[0]);
- // cudaMemcpy(dat, data_gpu, nt_big*rec_nx*rec_ny*sizeof(float), cudaMemcpyDeviceToHost);
-  for(int i=0; i<n_gpus; i++){
-
-    cudaSetDevice(i);
-
-    cudaFree(data_p0[i]);
-
-
-    cudaFree(img_gpu[i]);
-
-    cudaFree(data_p1[i]);
-
-    cudaFree(src_p0[i]);
-
-    cudaFree(src_p1[i]);
-
-
-  }
-  cudaSetDevice(0);
-
-  cudaFree(data_gpu);
-
-  cudaFree(datageom_gpu);
-
-  cudaFree(source_gpu);
-
-  cudaFree(srcgeom_gpu);
-
-
-}
-
-
-
-
-}
-void writeWavefield(char *tag, float **dat, int n3s,int ngpu, int n1, int n2, int n3,int edge){
-  long long big_block;
-  int igpu,block;
-  long long doing,done,toDo;
-  long long big=500*1000*1000;
-  big_block=(long long)n1*(long long)n2 *(long long)n3;
-  big_block=big_block/ngpu+n1*n2;
-
-fprintf(stderr,"CXXX %d %d %d \n",n1,n2,n3s*2);
-  float *buf=(float*)malloc(sizeof(float*)*big_block);
-  for(igpu=0; igpu < 2; igpu++){
-      toDo=(long long)n1*(long long)n2*n3s;
-     cudaMemcpy(buf,dat[igpu]+n1*n2*edge,toDo*sizeof(float),cudaMemcpyDeviceToHost);
-     done=0;
-     while(done < toDo){
-       doing=toDo; if(doing > big) doing=big;
-       block=doing;
-       srite(tag,&buf[done],block*4);
-       done+=doing;
-     }
-   }
-   free(buf);
-   // seperr("");
-}
 void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu, float *p1_s_cpu, float *img, int npts_src,int nt){
  
   float *src_p0[n_gpus],*src_p1[n_gpus],*data_p0[n_gpus],*data_p1[n_gpus],*img_gpu[n_gpus];
@@ -724,7 +730,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu, float *p1_s_cp
 
     cudaMemset(data_p0[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
     cudaMemset(data_p1[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
-    cudaMemset(img_gpu[i], 0,(n1*n2*n3+lead_pad)*sizeof(float));
+    cudaMemset(img_gpu[i], 0,(n1*n2*n3)*sizeof(float));
     cudaMemset(src_p0[i], 0,(n1*n2*n3+radius*n1*n2+lead_pad)*sizeof(float));
     cudaMemset(src_p1[i], 0,(n1*n2*n3+radius*n1*n2+lead_pad)*sizeof(float));
 
@@ -797,34 +803,50 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu, float *p1_s_cp
     int id=it/jt;
     int ii=it-id*jt;
 
+	// halo region
     for(int i=0; i<n_gpus; i++){
+	  // TODO: stop recv when it == 1?
       cudaSetDevice(i);
       if(i>0){
-       wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h1, data_p1[i]+offset_cmp_h1, data_p0[i]+offset_cmp_h1, velocity[i]+offset_cmp_h1, radius, 2*radius);
+       wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h1, data_p1[i]+offset_cmp_h1, data_p0[i]+offset_cmp_h1, velocity2[i]+offset_cmp_h1, radius, 2*radius);
 
       if(it<nt-1) wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h1, src_p1[i]+offset_cmp_h1, src_p0[i]+offset_cmp_h1, velocity[i]+offset_cmp_h1, radius, 2*radius);
       }
       if(i<n_gpus-1){
-        wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h2, data_p1[i]+offset_cmp_h2, data_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, radius, 2*radius);
+		 // TODO: validate
+        wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h2, data_p1[i]+offset_cmp_h2, data_p0[i]+offset_cmp_h2, velocity2[i]+offset_cmp_h2, n3 - radius * 2, n3-radius);
 
-        if(it<nt-1) wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h2, src_p1[i]+offset_cmp_h2, src_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, radius, 2*radius); //THIS IS THE NAUGHTY ONE
+        if(it<nt-1) wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h2, src_p1[i]+offset_cmp_h2, src_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, n3-radius*2, n3-radius); //THIS IS THE NAUGHTY ONE
+        //wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h2, data_p1[i]+offset_cmp_h2, data_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, radius, 2*radius);
+
+        //if(it<nt-1) wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(src_p0[i]+offset_cmp_h2, src_p1[i]+offset_cmp_h2, src_p0[i]+offset_cmp_h2, velocity[i]+offset_cmp_h2, radius, 2*radius); //THIS IS THE NAUGHTY ONE
       }
       cudaStreamQuery(stream_halo[i]);
     }
     //damp_kernel<<<dimGrid, dimBlock>>>(nblocksz,data_p0,data_p1);
 
+	// internal region
     for(int i=0; i<n_gpus; i++){
       cudaSetDevice(i);
-      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
-
-      wave_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i]+offset_internal[i], data_p1[i]+offset_internal[i], data_p0[i]+offset_internal[i], velocity[i]+offset_internal[i], start3[i], end3[i]);
+	  if (it > 0) {
+      wave_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i]+offset_internal[i], data_p1[i]+offset_internal[i], data_p0[i]+offset_internal[i], velocity2[i]+offset_internal[i], start3[i], end3[i]);
+	  }
 
       if(it<(nt-1)){
-
         wave_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(src_p0[i]+offset_internal[i], src_p1[i]+offset_internal[i], src_p0[i]+offset_internal[i], velocity[i]+offset_internal[i], start3[i], end3[i]);
-
-        if(i==shot_gpu) new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(id_s,i_s, src_p1[i]+lead_pad); //p1??
+  if(i==shot_gpu) {
+  //new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(id_s,i_s, src_p1[i]+lead_pad); //p1??
+	  // TODO: fix inject2, use this optimization
+	  //if(npts_src<100) {
+	  new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(id_s ,i_s,src_p1[i]+lead_pad);
+	  //}
+	  //else {
+	  //new_src_inject2_kernel<<<dimGridx,dimBlock,0,stream_internal[i]>>>(id_s ,i_s,src_p1[i]+lead_pad);
+	  //}
+  }
       }
+	  // TODO: where should we put this?
+      damp_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
     }
 
 
@@ -849,6 +871,9 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu, float *p1_s_cp
       for(int i=0; i<n_gpus; i++){
         cudaSetDevice(device[i]);
         img_kernel<<<dimGrid,dimBlock,0,stream_internal[i]>>>(img_gpu[i]+lead_pad,data_p0[i]+lead_pad,src_p0[i]+lead_pad);
+		cudaDeviceSynchronize();
+  error = cudaGetLastError();
+  process_error( error, "img_kernel\n" );
       }
     }
 
@@ -860,8 +885,8 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu, float *p1_s_cp
     }
   }
 
-  //error = cudaGetLastError();
-  //process_error( error, "kernel" );
+  error = cudaGetLastError();
+  process_error( error, "kernel" );
 
   cudaSetDevice(device[0]);
   cudaEventRecord(stop,0);
@@ -893,8 +918,6 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu, float *p1_s_cp
   }
   cudaFree(data_gpu);
   cudaFree(datageom_gpu);
-  cudaFree(source_gpu0);
-  cudaFree(srcgeom_gpu0);
 }
 void transfer_sinc_table_s(int nsinc, int ns,  float **tables){
 	cudaSetDevice(0);

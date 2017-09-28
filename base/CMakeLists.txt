@@ -26,7 +26,7 @@ set(GPU_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaErrors.cu
 #  ${CMAKE_CURRENT_SOURCE_DIR}/gpu/gpu_finite_3d.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/gpu/gpu_funcs_3d.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/gpu/save.cu
+  #${CMAKE_CURRENT_SOURCE_DIR}/gpu/save.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/gpu/wave_fkernel.3d8o.cu)
 #set(INCLUDES
 #  ${CMAKE_CURRENT_SOURCE_DIR}/gpu/gpu_finite_3d.h \
