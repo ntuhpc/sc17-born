@@ -62,7 +62,7 @@ __constant__ float *sinc_d_table;
 __constant__ int nsinc_gpu;
 __constant__ int nextract_gpu;
 
-__constant__ int dir_gpu;
+__constant__ float dir_gpu;
 __constant__ int *extract_geom0;
 __constant__ int npts_gpu;
 
