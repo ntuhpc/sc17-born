@@ -1,8 +1,8 @@
-#include "cpu_prop.h"
+#include <tbb/tbb.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
-#include <tbb/tbb.h>
+#include "cpu_prop.h"
 #define C0 0
 #define CZ1 1
 #define CX1 2

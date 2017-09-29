@@ -1,10 +1,9 @@
-
-#include "vel_fd_3d.h"
 #include <math.h>
+#include <tbb/tbb.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
-#include <tbb/tbb.h>
+#include "vel_fd_3d.h"
 vel_fd_3d::vel_fd_3d(std::shared_ptr<SEP::genericIO> io, std::string tag) {
   _io = io;
   _old = _mid = _zero = false;
