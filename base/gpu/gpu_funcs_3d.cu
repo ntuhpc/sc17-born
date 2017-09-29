@@ -130,6 +130,22 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
                                           data_gpu0[ntrace_gpu * i + it + 6] +
                                       sinc_d_table[isinc * nsinc_gpu + 7] *
                                           data_gpu0[ntrace_gpu * i + it + 7]
+    //p[datageom_gpu0[i]] += dir_gpu * (sinc_d_table[isinc * nsinc_gpu] *
+    //                                      data_gpu0[ntblock_gpu * i + it] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 1] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 1] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 2] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 2] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 3] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 3] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 4] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 4] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 5] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 5] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 6] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 6] +
+    //                                  sinc_d_table[isinc * nsinc_gpu + 7] *
+    //                                      data_gpu0[ntblock_gpu * i + it + 7]
                                      );
   }
 }
@@ -1185,16 +1201,18 @@ void transfer_source_func(int npts, int nt, int *locs, float *vals) {
  
 void transfer_receiver_func(int nx, int ny, int nt, int *locs, float *vals) {
   cudaSetDevice(device[0]);
-  // cudaMalloc((void**) &data_gpu,nt*nx*ny*sizeof(float));
-  cudaMalloc((void **)&data_gpu,
-             (7 + ntblock_internal) * nx * ny * sizeof(float));
-  cudaMemset(data_gpu, 0, (7 + ntblock_internal) * nx * ny * sizeof(float));
+  cudaMalloc((void**) &data_gpu,nt*nx*ny*sizeof(float));
+  //cudaMalloc((void **)&data_gpu,
+  //           (7 + ntblock_internal) * nx * ny * sizeof(float));
+  //cudaMemset(data_gpu, 0, (7 + ntblock_internal) * nx * ny * sizeof(float));
   cudaMalloc((void **)&datageom_gpu, nx * ny * sizeof(float));
 
   fprintf(stderr, "TRASN RECEIVER %d %d %d \n", nx, ny, nx * ny);
   cudaMemcpy(datageom_gpu, locs, nx * ny * sizeof(float),
              cudaMemcpyHostToDevice);
-  cudaMemcpy(data_gpu, vals,(7+ ntblock_internal)*nx*ny*sizeof(float),
+  //cudaMemcpy(data_gpu, vals,(7+ ntblock_internal)*nx*ny*sizeof(float),
+  //   cudaMemcpyHostToDevice);
+  cudaMemcpy(data_gpu, vals,nt*nx*ny*sizeof(float),
      cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(rec_nx_gpu, &nx, sizeof(int));
   cudaMemcpyToSymbol(rec_ny_gpu, &ny, sizeof(int));
