@@ -66,7 +66,6 @@ void process_error(const cudaError_t &error, char *string = 0,
 
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
-  if (it + 7 < ntblock_gpu) {  // TODO: check correctness
     p[srcgeom_gpu0[ix]] +=
         dir_gpu *
         (sinc_s_table[isinc * nsinc_gpu] * source_gpu0[ntblock_gpu * ix + it] +
@@ -84,8 +83,9 @@ extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
              source_gpu0[ntblock_gpu * ix + it + 6] +
          sinc_s_table[isinc * nsinc_gpu + 7] *
              source_gpu0[ntblock_gpu * ix + it + 7]);
-  }
 }
+
+// TODO: call this function when number of sources is large
 extern "C" __global__ void new_src_inject2_kernel(int it, int isinc, float *p) {
   int j = blockIdx.y * blockDim.y + threadIdx.y;
   int k = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1165,15 +1165,15 @@ void transfer_source_func(int npts, int nt, int *locs, float *vals) {
 
   // srite("srccheck.H",vals,nt*npts*4);
   // fprintf(stderr,"%d %d \n",nt,npts);
-  // cudaMemcpy(source_gpu, vals, nt*npts*sizeof(float),
-  // cudaMemcpyHostToDevice);
+  cudaMemcpy(source_gpu, vals, nt*npts*sizeof(float),
+     cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(ntrace_gpu, &nt, sizeof(int));
   cudaMemcpyToSymbol(srcgeom_gpu0, &srcgeom_gpu, sizeof(int *));
   cudaMemcpyToSymbol(npts_gpu, &npts, sizeof(int));
 
   cudaMemcpyToSymbol(source_gpu0, &source_gpu, sizeof(float *));
-  //         int ntt=ntblock_internal+7;
-  //  cudaMemcpyToSymbol(ntblock_gpu, &ntt, sizeof(int));
+  int ntt=ntblock_internal+7;
+  cudaMemcpyToSymbol(ntblock_gpu, &ntt, sizeof(int));
 }
 void transfer_receiver_func(int nx, int ny, int nt, int *locs, float *vals) {
   cudaSetDevice(device[0]);
@@ -1186,15 +1186,15 @@ void transfer_receiver_func(int nx, int ny, int nt, int *locs, float *vals) {
   fprintf(stderr, "TRASN RECEIVER %d %d %d \n", nx, ny, nx * ny);
   cudaMemcpy(datageom_gpu, locs, nx * ny * sizeof(float),
              cudaMemcpyHostToDevice);
-  // cudaMemcpy(data_gpu, vals,(7+ ntblock_internal)*nx*ny*sizeof(float),
-  // cudaMemcpyHostToDevice);
+  cudaMemcpy(data_gpu, vals,(7+ ntblock_internal)*nx*ny*sizeof(float),
+     cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(rec_nx_gpu, &nx, sizeof(int));
   cudaMemcpyToSymbol(rec_ny_gpu, &ny, sizeof(int));
   cudaMemcpyToSymbol(ntrace_gpu, &nt, sizeof(int));
   cudaMemcpyToSymbol(datageom_gpu0, &datageom_gpu, sizeof(int *));
   cudaMemcpyToSymbol(data_gpu0, &data_gpu, sizeof(float *));
-  //     int ntt=ntblock_internal+7;
-  // cudaMemcpyToSymbol(ntblock_gpu, &ntt, sizeof(int));
+  int ntt=ntblock_internal+7;
+  cudaMemcpyToSymbol(ntblock_gpu, &ntt, sizeof(int));
 }
 void transfer_vel_func1(int n1, int n2, int n3, float *vel) {
   n3 = (n3 - 2 * radius) / n_gpus + 2 * radius;
