@@ -5,6 +5,7 @@
 #include "deriv_3d.h"
 #include "laplac_3d.h"
 #include "map_data_3d.h"
+#include <fstream>
 rtm_zero_op::rtm_zero_op(std::shared_ptr<SEP::paramObj> par,
                          std::shared_ptr<baseProp> prop,
                          std::shared_ptr<vel_fd_3d> vel_3d,
@@ -270,6 +271,9 @@ bool rtm_zero_op::adjoint(bool add, std::shared_ptr<my_vector> mvec,
     _prop->transferReceiverFunc(rec_nx, rec_ny, nt_big, locs, rec_func->vals);
     _prop->sourceProp(ad1.n, ad2.n, ad3.n, false, true, src_p0->vals,
                       src_p1->vals, jts, nptsS, nt);
+	//std::ofstream output("p0_gpu.txt");
+	//for (size_t i = 0; i < ad1.n * ad2.n * ad3.n; ++i)
+	//	output << src_p0->vals[i] << std::endl;
 
     time_t startwtimem, endwtimem;
     startwtimem = time(&startwtimem);

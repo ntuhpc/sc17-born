@@ -59,11 +59,12 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
   p1y[1] = p1[addr_fwd];
   p1y[2] = p1[addr_fwd += stride];
   p1y[3] = p1[addr_fwd += stride];
-  p1s[jl][il] = p1[addr_fwd += stride];  // Copy to shared memory
+  p1y[4] = p1[addr_fwd += stride];  // Copy to shared memory
   p1y[5] = p1[addr_fwd += stride];
   p1y[6] = p1[addr_fwd += stride];
   p1y[7] = p1[addr_fwd += stride];
   p1y[8] = p1[addr_fwd += stride];
+
 
   //#pragma unroll 9
   for (int yl = start3; yl < end3; yl++) {
@@ -71,44 +72,46 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
     p1y[0] = p1y[1];
     p1y[1] = p1y[2];
     p1y[2] = p1y[3];
-    p1y[3] = p1s[jl][il];
-    p1s[jl][il] = p1y[5];
+    p1y[3] = p1y[4];
+	p1y[4] = p1y[5]; // current
     p1y[5] = p1y[6];
     p1y[6] = p1y[7];
     p1y[7] = p1y[8];
     p1y[8] = p1[addr_fwd += stride];
 
+	// also load bottom & top halo
     if (threadIdx.y < FAT) {
       p1s[threadIdx.y][il] = p1[addr - FAT * n1gpu];
-      p1s[jl + BLOCKX_SIZE][il] = p1[addr + BLOCKX_SIZE * n1gpu];
+      p1s[jl + BLOCKY_SIZE][il] = p1[addr + BLOCKY_SIZE * n1gpu];
     }
-    if (threadIdx.y >= FAT && threadIdx.y < FAT) {
-      p1s[threadIdx.y + BLOCKY_SIZE][il] =
-          p1[addr + (BLOCKY_SIZE - FAT) * n1gpu];
-      p1s[threadIdx.y + BLOCKY_SIZE][il + BLOCKX_SIZE] =
-          p1[addr + (BLOCKY_SIZE - FAT) * n1gpu + BLOCKX_SIZE];
-    }
+    //if (threadIdx.y >= FAT && threadIdx.y < FAT) {
+    //  p1s[threadIdx.y + BLOCKY_SIZE][il] =
+    //      p1[addr + (BLOCKY_SIZE - FAT) * n1gpu];
+    //  p1s[threadIdx.y + BLOCKY_SIZE][il + BLOCKX_SIZE] =
+    //      p1[addr + (BLOCKY_SIZE - FAT) * n1gpu + BLOCKX_SIZE];
+    //}
+	// also load left & right halo
     if (threadIdx.x < FAT) {
       p1s[jl][threadIdx.x] = p1[addr - FAT];
       p1s[jl][il + BLOCKX_SIZE] = p1[addr + BLOCKX_SIZE];
     }
-
+    p1s[jl][il] = p1y[4];
     __syncthreads();
 
-    p2[addr] = vel[addr] * (coeffs[C0] * p1s[jl][il] +
-                            coeffs[CZ1] * (p1s[jl][il + 1] + p1s[jl][il - 1]) +
-                            coeffs[CX1] * (p1s[jl + 1][il] + p1s[jl - 1][il]) +
-                            coeffs[CY1] * (p1y[radius + 1] + p1y[radius - 1]) +
-                            coeffs[CZ2] * (p1s[jl][il + 2] + p1s[jl][il - 2]) +
-                            coeffs[CX2] * (p1s[jl + 2][il] + p1s[jl - 2][il]) +
-                            coeffs[CY2] * (p1y[radius + 2] + p1y[radius - 2]) +
-                            coeffs[CZ3] * (p1s[jl][il + 3] + p1s[jl][il - 3]) +
-                            coeffs[CX3] * (p1s[jl + 3][il] + p1s[jl - 3][il]) +
-                            coeffs[CY3] * (p1y[radius + 3] + p1y[radius - 3]) +
-                            coeffs[CZ4] * (p1s[jl][il + 4] + p1s[jl][il - 4]) +
-                            coeffs[CX4] * (p1s[jl + 4][il] + p1s[jl - 4][il]) +
-                            coeffs[CY4] * (p1y[radius + 4] + p1y[radius - 4])) +
-               p1s[jl][il] + p1s[jl][il] - p0[addr];
+    p2[addr] = vel[addr] * (coeffs[C0] * p1y[4] +
+                            coeffs[CX1] * (p1s[jl][il + 1] + p1s[jl][il - 1]) +
+                            coeffs[CX2] * (p1s[jl][il + 2] + p1s[jl][il - 2]) +
+                            coeffs[CX3] * (p1s[jl][il + 3] + p1s[jl][il - 3]) +
+                            coeffs[CX4] * (p1s[jl][il + 4] + p1s[jl][il - 4]) +
+                            coeffs[CY1] * (p1s[jl + 1][il] + p1s[jl - 1][il]) +
+                            coeffs[CY2] * (p1s[jl + 2][il] + p1s[jl - 2][il]) +
+                            coeffs[CY3] * (p1s[jl + 3][il] + p1s[jl - 3][il]) +
+                            coeffs[CY4] * (p1s[jl + 4][il] + p1s[jl - 4][il]) +
+                            coeffs[CZ1] * (p1y[3] + p1y[5]) +
+                            coeffs[CZ2] * (p1y[2] + p1y[6]) +
+                            coeffs[CZ3] * (p1y[1] + p1y[7]) +
+                            coeffs[CZ4] * (p1y[0] + p1y[8])
+                           ) + 2 * p1y[4] - p0[addr];
     addr += stride;
   }
 }
@@ -227,8 +230,9 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
 
   int stride = n1gpu * n2gpu;  // Number of elements between wavefield slices
   int edge = 0;
-  // int bc_agpu=40;
-  // float bc_bgpu=0.0005;
+  // TODO: check
+  int bc_agpu=40;
+  float bc_bgpu=0.0005;
 
   for (int zg = 0; zg < n3gpu; zg++) {
     if (n_gpus == 1)
@@ -249,13 +253,13 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
                                  jg - FAT));  // Don't damp top or bottom
     // edge=min2(ig-FAT,
     // min2(zg-FAT,min2(min2(n2gpu-FAT-jg,n1gpu-FAT-ig),min2(n3gpu-FAT-zg,jg-FAT))));
-    if (edge >= 0) {
+    if (edge >= 0 && edge < 40) {
       int addr = ig + n1gpu * jg + stride * zg;
       float temp = expf(-bc_bgpu * (bc_agpu - edge));
-      if (temp < 1.) {
+      //if (temp < 1.) {
         p1[addr] *= temp;
         p0[addr] *= temp;
-      }
+      //}
     }
   }
 }
