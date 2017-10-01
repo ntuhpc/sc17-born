@@ -5,7 +5,7 @@
 #define SIZE 24
 #define RADIUS 4
 
-float coeffs_cpu[13] = {1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4};
+float coeffs_cpu[13] = {5., 1., 2., 3., 4., 1., 2., 3., 4., 1., 2., 3., 4.};
 
 void prop(float *p0, float *p1, float *vel) {
 	int _nx = SIZE;
@@ -49,9 +49,9 @@ int main()
 	cudaMalloc(&vel_gpu, SIZE*SIZE*SIZE*sizeof(float));
 	for (int i = 0; i < SIZE*SIZE*SIZE; ++i)
 	{
-		ref_array_cpu[i] = i;
-		cpu_result[i] = 100;
-		vel_cpu[i] = i;
+		ref_array_cpu[i] = (float)(i % 100);
+		cpu_result[i] = 233.;
+		vel_cpu[i] = (float(i % 20));
 	}
 	cudaMemcpy(test_array_gpu, ref_array_cpu, SIZE*SIZE*SIZE*sizeof(float), cudaMemcpyHostToDevice);
 	cudaMemcpy(vel_gpu, vel_cpu, SIZE*SIZE*SIZE*sizeof(float), cudaMemcpyHostToDevice);
@@ -62,7 +62,7 @@ int main()
 	dim3 block(16, 16);
 	dim3 grid(1, 1);
 	int offset = SIZE * SIZE * RADIUS + SIZE * RADIUS + RADIUS;
-	wave_kernel<<<grid, block>>>(gpu_p0+offset, test_array_gpu+offset, gpu_p0+offset, vel_gpu+offset, 0, 16);
+	//wave_kernel<<<grid, block>>>(gpu_p0+offset, test_array_gpu+offset, gpu_p0+offset, vel_gpu+offset, 0, 16);
 	cudaError_t err = cudaGetLastError();
 	if (err != cudaSuccess)
 		printf("%s\n", cudaGetErrorString(err));
@@ -72,6 +72,9 @@ int main()
 	prop(cpu_result, ref_array_cpu, vel_cpu);
 
 	// compare
-	printf("cpu at %d: %f\n", offset, cpu_result[offset]);
-	printf("gpu at %d: %f\n", offset, gpu_result[offset]);
+	for (int i = 0; i < 16; ++i)
+	{
+		printf("cpu at %d: %f\n", offset + i, cpu_result[offset+i]);
+		printf("gpu at %d: %f\n", offset + i, gpu_result[offset+i]);
+	}
 }

@@ -39,94 +39,119 @@ __constant__ float coeffs[COEFFS_SIZE];
 
 extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
                                        float *vel, const int start3,
-                                       const int end3) {
+                                       const int end3, const int last_x_block, const int last_y_block) {
   __shared__ float p1s[BLOCKY_SIZE + 2 * FAT][BLOCKX_SIZE + 2 * FAT];
 
-  int ig = blockIdx.x * blockDim.x +
-           threadIdx.x;  // Global coordinates for the fastest two axes
-  int jg = blockIdx.y * blockDim.y + threadIdx.y;
-  //if (ig > n1gpu || jg > n2gpu) return;
+  int ix = blockIdx.x * blockDim.x + threadIdx.x;
+  int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
-  int il = threadIdx.x + FAT;  // Local coordinates for the fastest two axes
-  int jl = threadIdx.y + FAT;
+  if (ix >= (n1gpu - 2 * radius) || iy >= (n2gpu - 2 * radius)) return; // boundary condition check
 
-  float p1y[2 * radius + 1];  // Array of elements to hold slow axis values
+  int in_idx = iy * n1gpu + ix - radius * n1gpu * n2gpu;
+  //int in_idx = iy * 24 + ix - radius * 24 * 24;
+  int out_idx = 0;
+  int stride = n1gpu * n2gpu;
+  //int stride = 24 * 24;
 
-  int stride = n1gpu * n2gpu;  // Number of elements between wavefield slices
-  int addr = ig + n1gpu * jg;  // Index of the central slow-axis element
-  int addr_fwd = addr - radius * stride;  // Index of the first slow-axis element
+  float infront1, infront2, infront3, infront4;
+  float behind1, behind2, behind3, behind4;
+  float current;
+
+  int tx = threadIdx.x + radius;
+  int ty = threadIdx.y + radius;
 
   // Assign slow axis values
-  p1y[1] = p1[addr_fwd];
-  p1y[2] = p1[addr_fwd += stride];
-  p1y[3] = p1[addr_fwd += stride];
-  p1s[jl][il] = p1[addr_fwd += stride];  // Copy to shared memory
-  p1y[5] = p1[addr_fwd += stride];
-  p1y[6] = p1[addr_fwd += stride];
-  p1y[7] = p1[addr_fwd += stride];
-  p1y[8] = p1[addr_fwd += stride];
+  behind3 = p1[in_idx]; in_idx += stride;
+  behind2 = p1[in_idx]; in_idx += stride;
+  behind1 = p1[in_idx]; in_idx += stride;
+  current = p1[in_idx]; out_idx = in_idx; in_idx += stride;
+  infront1 = p1[in_idx]; in_idx += stride;
+  infront2 = p1[in_idx]; in_idx += stride;
+  infront3 = p1[in_idx]; in_idx += stride;
+  infront4 = p1[in_idx]; in_idx += stride;
 
+  for (int i = start3; i < end3; ++i) {
+    // advance the slice
+    behind4 = behind3;
+    behind3 = behind2;
+    behind2 = behind1;
+    behind1 = current;
+    current = infront1;
+    infront1 = infront2;
+    infront2 = infront3;
+    infront3 = infront4;
+    infront4 = p1[in_idx];
 
-  //#pragma unroll 9
-  for (int yl = start3; yl < end3; yl++) {
-	__syncthreads();
-    // Update slow axis values
-    p1y[0] = p1y[1];
-    p1y[1] = p1y[2];
-    p1y[2] = p1y[3];
-    p1y[3] = p1s[jl][il];
-	p1s[jl][il] = p1y[5]; // current
-    p1y[5] = p1y[6];
-    p1y[6] = p1y[7];
-    p1y[7] = p1y[8];
-    p1y[8] = p1[addr_fwd += stride];
-
-	// also load bottom & top halo
-    if (threadIdx.y < FAT) {
-      p1s[threadIdx.y][il] = p1[addr - FAT * n1gpu];
-      p1s[jl + BLOCKY_SIZE][il] = p1[addr + BLOCKY_SIZE * n1gpu];
-    }
-    //if (threadIdx.y >= FAT && threadIdx.y < FAT) {
-    //  p1s[threadIdx.y + BLOCKY_SIZE][il] =
-    //      p1[addr + (BLOCKY_SIZE - FAT) * n1gpu];
-    //  p1s[threadIdx.y + BLOCKY_SIZE][il + BLOCKX_SIZE] =
-    //      p1[addr + (BLOCKY_SIZE - FAT) * n1gpu + BLOCKX_SIZE];
-    //}
-	// also load left & right halo
-    if (threadIdx.x < FAT) {
-      p1s[jl][threadIdx.x] = p1[addr - FAT];
-      p1s[jl][il + BLOCKX_SIZE] = p1[addr + BLOCKX_SIZE];
-    }
-    //p1s[jl][il] = p1y[4];
+    in_idx += stride;
+    out_idx += stride;
     __syncthreads();
-	//if (ig == 0 && jg == 0 && yl == start3)
-	//{
-	//	printf("%f\n", p1s[jl][il]);
-	//	printf("%f %f %f %f\n", p1s[jl][il-1], p1s[jl][il-2], p1s[jl][il-3], p1s[jl][il-4]);
-	//	printf("%f %f %f %f\n", p1s[jl][il+1], p1s[jl][il+2], p1s[jl][il+3], p1s[jl][il+4]);
-	//	printf("%f %f %f %f\n", p1s[jl - 1][il], p1s[jl - 2][il], p1s[jl - 3][il], p1s[jl - 4][il]);
-	//	printf("%f %f %f %f\n", p1s[jl + 1][il], p1s[jl + 2][il], p1s[jl + 3][il], p1s[jl + 4][il]);
-	//	printf("%f %f %f %f %f %f %f %f\n", p1y[0], p1y[1], p1y[2], p1y[3], p1y[5], p1y[6], p1y[7], p1y[8]);
-	//	printf("%f\n", p0[addr]);
-	//	printf("%f\n", vel[addr]);
-	//}
 
-	if (ig < n1gpu && jg < n2gpu)
-    p2[addr] = vel[addr] * (coeffs[C0] * p1s[jl][il] +
-                            coeffs[CX1] * (p1s[jl][il - 1] + p1s[jl][il + 1]) +
-                            coeffs[CX2] * (p1s[jl][il - 2] + p1s[jl][il + 2]) +
-                            coeffs[CX3] * (p1s[jl][il - 3] + p1s[jl][il + 3]) +
-                            coeffs[CX4] * (p1s[jl][il - 4] + p1s[jl][il + 4]) +
-                            coeffs[CY1] * (p1s[jl - 1][il] + p1s[jl + 1][il]) +
-                            coeffs[CY2] * (p1s[jl - 2][il] + p1s[jl + 2][il]) +
-                            coeffs[CY3] * (p1s[jl - 3][il] + p1s[jl + 3][il]) +
-                            coeffs[CY4] * (p1s[jl - 4][il] + p1s[jl + 4][il]) +
-                            coeffs[CZ1] * (p1y[3] + p1y[5]) +
-                            coeffs[CZ2] * (p1y[2] + p1y[6]) +
-                            coeffs[CZ3] * (p1y[1] + p1y[7]) +
-                            coeffs[CZ4] * (p1y[0] + p1y[8])) +
-                            2 * p1s[jl][il] - p0[addr];
-    addr += stride;
+    // also load bottom & top halo
+    if (blockIdx.y == last_y_block) {
+    	if (threadIdx.y == 0) {
+    	  int offset = n2gpu - 2 * radius - iy;
+
+    	  p1s[0][tx] = p1[out_idx - radius * n1gpu];
+    	  p1s[ty + offset][tx] = p1[out_idx + offset * n1gpu];
+
+    	  p1s[1][tx] = p1[out_idx - 3 * n1gpu];
+    	  p1s[ty + offset+1][tx] = p1[out_idx + (offset + 1) * n1gpu];
+
+    	  p1s[2][tx] = p1[out_idx - 2 * n1gpu];
+    	  p1s[ty + offset+2][tx] = p1[out_idx + (offset + 2) * n1gpu];
+
+    	  p1s[3][tx] = p1[out_idx - 1 * n1gpu];
+    	  p1s[ty + offset+3][tx] = p1[out_idx + (offset + 3) * n1gpu];
+    	}
+    } else {
+    	if (threadIdx.y < radius) {
+    	  p1s[threadIdx.y][tx] = p1[out_idx - radius * n1gpu];
+    	  //p1s[threadIdx.y][tx] = p1[out_idx - radius * 24];
+    	  p1s[ty + BLOCKY_SIZE][tx] = p1[out_idx + BLOCKY_SIZE * n1gpu];
+    	  //p1s[ty + BLOCKY_SIZE][tx] = p1[out_idx + BLOCKY_SIZE * 24];
+    	}
+    }
+    // also load left & right halo
+    if (blockIdx.x == last_x_block) {
+    	if (threadIdx.x == 0) {
+    	  int offset = n1gpu - 2 * radius - ix;
+
+          p1s[ty][0] = p1[out_idx - radius];
+          p1s[ty][tx + offset] = p1[out_idx + offset];
+
+          p1s[ty][1] = p1[out_idx - 3];
+          p1s[ty][tx + offset + 1] = p1[out_idx + offset + 1];
+
+          p1s[ty][2] = p1[out_idx - 2];
+          p1s[ty][tx + offset + 2] = p1[out_idx + offset + 2];
+
+          p1s[ty][3] = p1[out_idx - 1];
+          p1s[ty][tx + offset + 3] = p1[out_idx + offset + 3];
+    	}
+    } else {
+      if (threadIdx.x < radius) {
+        p1s[ty][threadIdx.x] = p1[out_idx - radius];
+        p1s[ty][tx + BLOCKX_SIZE] = p1[out_idx + BLOCKX_SIZE];
+      }
+    }
+    p1s[ty][tx] = current;
+    __syncthreads();
+
+    float temp = 2.f * current - p0[out_idx];
+    float div = coeffs[C0] * current +
+                            coeffs[CX1] * (p1s[ty][tx - 1] + p1s[ty][tx + 1]) +
+                            coeffs[CX2] * (p1s[ty][tx - 2] + p1s[ty][tx + 2]) +
+                            coeffs[CX3] * (p1s[ty][tx - 3] + p1s[ty][tx + 3]) +
+                            coeffs[CX4] * (p1s[ty][tx - 4] + p1s[ty][tx + 4]) +
+                            coeffs[CY1] * (p1s[ty - 1][tx] + p1s[ty + 1][tx]) +
+                            coeffs[CY2] * (p1s[ty - 2][tx] + p1s[ty + 2][tx]) +
+                            coeffs[CY3] * (p1s[ty - 3][tx] + p1s[ty + 3][tx]) +
+                            coeffs[CY4] * (p1s[ty - 4][tx] + p1s[ty + 4][tx]) +
+                            coeffs[CZ1] * (infront1 + behind1) +
+                            coeffs[CZ2] * (infront2 + behind2) +
+                            coeffs[CZ3] * (infront3 + behind3) +
+                            coeffs[CZ4] * (infront4 + behind4);
+    p0[out_idx] = temp + div * vel[out_idx];
   }
 }
 

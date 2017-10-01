@@ -252,13 +252,16 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
 
   // Blocks for internal data
   // int nblocks1=(n1-2*FAT)/(2*BLOCKX_SIZE);
-  int nblocks1 = (n1 - 2 * FAT) / BLOCKX_SIZE;
-  int nblocks2 = (n2 - 2 * FAT) / BLOCKY_SIZE;
+  int nblocks1 = (n1 - 2 * FAT + BLOCKX_SIZE - 1) / BLOCKX_SIZE;
+  int nblocks2 = (n2 - 2 * FAT + BLOCKY_SIZE - 1) / BLOCKY_SIZE;
+  int last_x_block = nblocks1 - 1;
+  int last_y_block = nblocks2 - 1;
 
   dim3 dimBlock(BLOCKX_SIZE, BLOCKY_SIZE);
-  //dim3 dimGrid(nblocks1, nblocks2);
-  dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
-                (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
+  dim3 dimGrid(nblocks1, nblocks2);
+  //dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
+  //              (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
+  fprintf(stderr, "Kernel launch size is %d * %d\n", dimGrid.x, dimGrid.y);
 
   // Define separate streams for overlapping communication
   cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
@@ -318,6 +321,7 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
   cudaSetDevice(device[0]);
   cudaEventRecord(start, 0);
 
+  int src_counter = 0;
   for (int it = 0; it <= nt; it++) {
     int id = it / jt; // TODO: check if this "jt" is correct
     int ii = it - id * jt;
@@ -330,14 +334,14 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
         wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
             src_p0[i] + offset_cmp_h1, src_p1[i] + offset_cmp_h1,
             src_p0[i] + offset_cmp_h1, velocity[i] + offset_cmp_h1,
-			radius, radius * 2);
+			radius, radius * 2, last_x_block, last_y_block);
       }
 
       if (i < n_gpus - 1) {
         wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
             src_p0[i] + offset_cmp_h2, src_p1[i] + offset_cmp_h2,
             src_p0[i] + offset_cmp_h2, velocity[i] + offset_cmp_h2,
-            radius, radius * 2);
+            radius, radius * 2, last_x_block, last_y_block);
       }
 
       cudaStreamQuery(stream_halo[i]);
@@ -347,19 +351,20 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
     for (int i = 0; i < n_gpus; i++) {
       cudaSetDevice(device[i]);
 
-	  fprintf(stderr, "wave kernel from %d, range is %d\n", offset_internal[i], (end3[i] - start3[i]));
+	  //fprintf(stderr, "wave kernel from %d, range is %d\n", offset_internal[i], (end3[i] - start3[i]));
       wave_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
           src_p0[i] + offset_internal[i], src_p1[i] + offset_internal[i],
           src_p0[i] + offset_internal[i], velocity[i] + offset_internal[i],
-          start3[i], end3[i]);
+          start3[i], end3[i], last_x_block, last_y_block);
   error = cudaGetLastError();
   process_error(error, "wave_kernel\n");
       if (i == shot_gpu) // TODO: should this shot_gpu change?
         if (id + 7 < ntsource_internal)
 		{
-          fprintf(stderr, "src inject kernel with %d sources\n", npts_internal);
+          //fprintf(stderr, "src inject kernel with %d sources\n", npts_internal);
           new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
               id, ii, src_p0[i] + lead_pad);
+		  src_counter++;
   error = cudaGetLastError();
   process_error(error, "src_inject\n");
 		}
@@ -400,6 +405,7 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
 
   error = cudaGetLastError();
   process_error(error, "kernel");
+  fprintf(stderr, "Number of src injections: %d\n", src_counter);
 
   // Use device 0 to give a performance report
   cudaSetDevice(device[0]);
@@ -894,15 +900,25 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   }
 
 
-  int nblocks1 = (n1 - 2 * FAT) / BLOCKZ_SIZE;
-  int nblocks2 = (n2 - 2 * FAT) / BLOCKX_SIZE;
-  // int nblocks3=(n3-2*FAT)/BLOCKY_SIZE;
+  int nblocks1 = (n1 - 2 * FAT + BLOCKX_SIZE - 1) / BLOCKX_SIZE;
+  int nblocks2 = (n2 - 2 * FAT + BLOCKY_SIZE - 1) / BLOCKY_SIZE;
+  int last_x_block = nblocks1 - 1;
+  int last_y_block = nblocks2 - 1;
 
-  //dim3 dimGrid(nblocks1, nblocks2);
-  dim3 dimBlock(16, 16);
+  dim3 dimBlock(BLOCKX_SIZE, BLOCKY_SIZE);
+  dim3 dimGrid(nblocks1, nblocks2);
+  //dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
+  //              (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
+  fprintf(stderr, "Kernel launch size is %d * %d\n", dimGrid.x, dimGrid.y);
+  //int nblocks1 = (n1 - 2 * FAT) / BLOCKZ_SIZE;
+  //int nblocks2 = (n2 - 2 * FAT) / BLOCKX_SIZE;
+  //// int nblocks3=(n3-2*FAT)/BLOCKY_SIZE;
 
-  dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
-                (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
+  ////dim3 dimGrid(nblocks1, nblocks2);
+  //dim3 dimBlock(16, 16);
+
+  //dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
+  //              (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
 
   cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
   cudaEvent_t start, stop;
@@ -962,13 +978,13 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
           wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
               data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1,
               data_p0[i] + offset_cmp_h1, velocity2[i] + offset_cmp_h1, radius,
-              radius * 2);
+              radius * 2, last_x_block, last_y_block);
 
         if (it < nt - 1)
           wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
               src_p0[i] + offset_cmp_h1, src_p1[i] + offset_cmp_h1,
               src_p0[i] + offset_cmp_h1, velocity[i] + offset_cmp_h1, radius,
-              radius * 2);
+              radius * 2, last_x_block, last_y_block);
       }
       if (i < n_gpus - 1) {
         // TODO: validate
@@ -976,13 +992,13 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
           wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
               data_p0[i] + offset_cmp_h2, data_p1[i] + offset_cmp_h2,
               data_p0[i] + offset_cmp_h2, velocity2[i] + offset_cmp_h2,
-              radius, radius * 2);
+              radius, radius * 2, last_x_block, last_y_block);
 
         if (it < nt - 1)
           wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
               src_p0[i] + offset_cmp_h2, src_p1[i] + offset_cmp_h2,
               src_p0[i] + offset_cmp_h2, velocity[i] + offset_cmp_h2,
-              radius, radius * 2);  // THIS IS THE NAUGHTY ONE
+              radius, radius * 2, last_x_block, last_y_block);  // THIS IS THE NAUGHTY ONE
         // wave_kernel<<<dimGrid,dimBlock,0,stream_halo[i]>>>(data_p0[i]+offset_cmp_h2,
         // data_p1[i]+offset_cmp_h2, data_p0[i]+offset_cmp_h2,
         // velocity[i]+offset_cmp_h2, radius, 2*radius);
@@ -1004,14 +1020,14 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
         wave_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
             data_p0[i] + offset_internal[i], data_p1[i] + offset_internal[i],
             data_p0[i] + offset_internal[i], velocity2[i] + offset_internal[i],
-            start3[i], end3[i]);
+            start3[i], end3[i], last_x_block, last_y_block);
       }
 
       if (it < (nt - 1)) {
         wave_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
             src_p0[i] + offset_internal[i], src_p1[i] + offset_internal[i],
             src_p0[i] + offset_internal[i], velocity[i] + offset_internal[i],
-            start3[i], end3[i]);
+            start3[i], end3[i], last_x_block, last_y_block);
         if (i == shot_gpu) {
           if (id_s + 7 < ntsource_internal)
           // new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(id_s,i_s,
