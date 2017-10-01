@@ -87,7 +87,7 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
     __syncthreads();
 
     // also load bottom & top halo
-    if (blockIdx.y == last_y_block) {
+    if (blockIdx.y == last_y_block && blockDim.y != BLOCKY_SIZE) {
     	if (threadIdx.y == 0) {
     	  int offset = n2gpu - 2 * radius - iy;
 
@@ -112,7 +112,7 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
     	}
     }
     // also load left & right halo
-    if (blockIdx.x == last_x_block) {
+    if (blockIdx.x == last_x_block && blockDim.x != BLOCKX_SIZE) {
     	if (threadIdx.x == 0) {
     	  int offset = n1gpu - 2 * radius - ix;
 
@@ -137,7 +137,19 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
     p1s[ty][tx] = current;
     __syncthreads();
 
-    float temp = 2.f * current - p0[out_idx];
+//if (ix == 0 && iy == 0 && i == start3)
+//{
+//	printf("current: %f\n", p1s[tx][ty]);
+//	printf("x axis: %f %f %f %f\n", p1s[ty][tx-1], p1s[ty][tx-2], p1s[ty][tx-3], p1s[ty][tx-4]);
+//	printf("x axis: %f %f %f %f\n", p1s[ty][tx+1], p1s[ty][tx+2], p1s[ty][tx+3], p1s[ty][tx+4]);
+//	printf("y axis negative: %f %f %f %f\n", p1s[ty - 1][tx], p1s[ty - 2][tx], p1s[ty - 3][tx], p1s[ty - 4][tx]);
+//	printf("y pos: %f %f %f %f\n", p1s[ty + 1][tx], p1s[ty + 2][tx], p1s[ty + 3][tx], p1s[ty + 4][tx]);
+//	printf("z axis: %f %f %f %f %f %f %f %f\n", behind4, behind3, behind2, behind1, infront1, infront2, infront3, infront4);
+//	printf("p0: %f\n", p0[out_idx]);
+//	printf("vel: %f\n", vel[out_idx]);
+//}
+
+    float temp = current + current - p0[out_idx];
     float div = coeffs[C0] * current +
                             coeffs[CX1] * (p1s[ty][tx - 1] + p1s[ty][tx + 1]) +
                             coeffs[CX2] * (p1s[ty][tx - 2] + p1s[ty][tx + 2]) +

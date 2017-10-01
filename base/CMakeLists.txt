@@ -23,7 +23,7 @@ set(INCLUDES my_vector.h my_operator.h hypercube_float.h
 if (USE_GPU)
 	set(CUDA_HOST_COMPILER g++)
 	set(CUDA_PROPAGATE_HOST_FLAGS OFF)
-	set(CUDA_NVCC_FLAGS "-O3 -DNDEBUG")
+	set(CUDA_NVCC_FLAGS "-O2 -DNDEBUG")
 	set(GPU_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/gpu/cudaErrors.cu
 		${CMAKE_CURRENT_SOURCE_DIR}/gpu/gpu_funcs_3d.cu
 		${CMAKE_CURRENT_SOURCE_DIR}/gpu/wave_fkernel.3d8o.cu)

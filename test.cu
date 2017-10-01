@@ -5,7 +5,7 @@
 #define SIZE 24
 #define RADIUS 4
 
-float coeffs_cpu[13] = {5., 1., 2., 3., 4., 1., 2., 3., 4., 1., 2., 3., 4.};
+float coeffs_cpu[13] = get_coeffs(SIZE, SIZE, SIZE);
 
 void prop(float *p0, float *p1, float *vel) {
 	int _nx = SIZE;
@@ -49,8 +49,8 @@ int main()
 	cudaMalloc(&vel_gpu, SIZE*SIZE*SIZE*sizeof(float));
 	for (int i = 0; i < SIZE*SIZE*SIZE; ++i)
 	{
-		ref_array_cpu[i] = (float)(i % 100);
-		cpu_result[i] = 233.;
+		ref_array_cpu[i] = (float)(i % 4);
+		cpu_result[i] = 7.0009;
 		vel_cpu[i] = (float(i % 20));
 	}
 	cudaMemcpy(test_array_gpu, ref_array_cpu, SIZE*SIZE*SIZE*sizeof(float), cudaMemcpyHostToDevice);
@@ -62,13 +62,19 @@ int main()
 	dim3 block(16, 16);
 	dim3 grid(1, 1);
 	int offset = SIZE * SIZE * RADIUS + SIZE * RADIUS + RADIUS;
-	//wave_kernel<<<grid, block>>>(gpu_p0+offset, test_array_gpu+offset, gpu_p0+offset, vel_gpu+offset, 0, 16);
+	wave_kernel<<<grid, block>>>(gpu_p0+offset, test_array_gpu+offset, gpu_p0+offset, vel_gpu+offset, 0, 16, 0, 0);
 	cudaError_t err = cudaGetLastError();
 	if (err != cudaSuccess)
 		printf("%s\n", cudaGetErrorString(err));
 	cudaMemcpy(gpu_result, gpu_p0, SIZE*SIZE*SIZE*sizeof(float), cudaMemcpyDeviceToHost);
 
 	// run CPU impl
+	printf("current: %f\n", ref_array_cpu[offset]);
+	printf("x neg: %f %f %f %f\n", ref_array_cpu[offset-1], ref_array_cpu[offset-2], ref_array_cpu[offset-3], ref_array_cpu[offset-4]);
+	printf("x pos: %f %f %f %f\n", ref_array_cpu[offset+1], ref_array_cpu[offset+2], ref_array_cpu[offset+3], ref_array_cpu[offset+4]);
+	printf("y neg: %f %f %f %f\n", ref_array_cpu[offset-1*24], ref_array_cpu[offset-2*24], ref_array_cpu[offset-3*24], ref_array_cpu[offset-4*24]);
+	printf("y pos: %f %f %f %f\n", ref_array_cpu[offset+1*24], ref_array_cpu[offset+2*24], ref_array_cpu[offset+3*24], ref_array_cpu[offset+4*24]);
+	//printf("z: %f %f %f %f %f %f %f %f\n");
 	prop(cpu_result, ref_array_cpu, vel_cpu);
 
 	// compare
