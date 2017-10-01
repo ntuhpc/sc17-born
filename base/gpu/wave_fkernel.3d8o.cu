@@ -2,6 +2,7 @@
         By: Chris Leader, Abdullah AlTheyab
         Ref: similar to Paulius code but for 2D, then re-extended to 3D
  */
+#include <stdio.h>
 #include "gpu_finite_3d.h"
 #define BLOCKZ_SIZE 16
 #define BLOCKX_SIZE 16
@@ -44,6 +45,7 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
   int ig = blockIdx.x * blockDim.x +
            threadIdx.x;  // Global coordinates for the fastest two axes
   int jg = blockIdx.y * blockDim.y + threadIdx.y;
+  //if (ig > n1gpu || jg > n2gpu) return;
 
   int il = threadIdx.x + FAT;  // Local coordinates for the fastest two axes
   int jl = threadIdx.y + FAT;
@@ -52,14 +54,13 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
 
   int stride = n1gpu * n2gpu;  // Number of elements between wavefield slices
   int addr = ig + n1gpu * jg;  // Index of the central slow-axis element
-  int addr_fwd =
-      addr - radius * stride;  // Index of the first slow-axis element
+  int addr_fwd = addr - radius * stride;  // Index of the first slow-axis element
 
   // Assign slow axis values
   p1y[1] = p1[addr_fwd];
   p1y[2] = p1[addr_fwd += stride];
   p1y[3] = p1[addr_fwd += stride];
-  p1y[4] = p1[addr_fwd += stride];  // Copy to shared memory
+  p1s[jl][il] = p1[addr_fwd += stride];  // Copy to shared memory
   p1y[5] = p1[addr_fwd += stride];
   p1y[6] = p1[addr_fwd += stride];
   p1y[7] = p1[addr_fwd += stride];
@@ -68,12 +69,13 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
 
   //#pragma unroll 9
   for (int yl = start3; yl < end3; yl++) {
+	__syncthreads();
     // Update slow axis values
     p1y[0] = p1y[1];
     p1y[1] = p1y[2];
     p1y[2] = p1y[3];
-    p1y[3] = p1y[4];
-	p1y[4] = p1y[5]; // current
+    p1y[3] = p1s[jl][il];
+	p1s[jl][il] = p1y[5]; // current
     p1y[5] = p1y[6];
     p1y[6] = p1y[7];
     p1y[7] = p1y[8];
@@ -95,23 +97,35 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
       p1s[jl][threadIdx.x] = p1[addr - FAT];
       p1s[jl][il + BLOCKX_SIZE] = p1[addr + BLOCKX_SIZE];
     }
-    p1s[jl][il] = p1y[4];
+    //p1s[jl][il] = p1y[4];
     __syncthreads();
+	//if (ig == 0 && jg == 0 && yl == start3)
+	//{
+	//	printf("%f\n", p1s[jl][il]);
+	//	printf("%f %f %f %f\n", p1s[jl][il-1], p1s[jl][il-2], p1s[jl][il-3], p1s[jl][il-4]);
+	//	printf("%f %f %f %f\n", p1s[jl][il+1], p1s[jl][il+2], p1s[jl][il+3], p1s[jl][il+4]);
+	//	printf("%f %f %f %f\n", p1s[jl - 1][il], p1s[jl - 2][il], p1s[jl - 3][il], p1s[jl - 4][il]);
+	//	printf("%f %f %f %f\n", p1s[jl + 1][il], p1s[jl + 2][il], p1s[jl + 3][il], p1s[jl + 4][il]);
+	//	printf("%f %f %f %f %f %f %f %f\n", p1y[0], p1y[1], p1y[2], p1y[3], p1y[5], p1y[6], p1y[7], p1y[8]);
+	//	printf("%f\n", p0[addr]);
+	//	printf("%f\n", vel[addr]);
+	//}
 
-    p2[addr] = vel[addr] * (coeffs[C0] * p1y[4] +
-                            coeffs[CX1] * (p1s[jl][il + 1] + p1s[jl][il - 1]) +
-                            coeffs[CX2] * (p1s[jl][il + 2] + p1s[jl][il - 2]) +
-                            coeffs[CX3] * (p1s[jl][il + 3] + p1s[jl][il - 3]) +
-                            coeffs[CX4] * (p1s[jl][il + 4] + p1s[jl][il - 4]) +
-                            coeffs[CY1] * (p1s[jl + 1][il] + p1s[jl - 1][il]) +
-                            coeffs[CY2] * (p1s[jl + 2][il] + p1s[jl - 2][il]) +
-                            coeffs[CY3] * (p1s[jl + 3][il] + p1s[jl - 3][il]) +
-                            coeffs[CY4] * (p1s[jl + 4][il] + p1s[jl - 4][il]) +
+	if (ig < n1gpu && jg < n2gpu)
+    p2[addr] = vel[addr] * (coeffs[C0] * p1s[jl][il] +
+                            coeffs[CX1] * (p1s[jl][il - 1] + p1s[jl][il + 1]) +
+                            coeffs[CX2] * (p1s[jl][il - 2] + p1s[jl][il + 2]) +
+                            coeffs[CX3] * (p1s[jl][il - 3] + p1s[jl][il + 3]) +
+                            coeffs[CX4] * (p1s[jl][il - 4] + p1s[jl][il + 4]) +
+                            coeffs[CY1] * (p1s[jl - 1][il] + p1s[jl + 1][il]) +
+                            coeffs[CY2] * (p1s[jl - 2][il] + p1s[jl + 2][il]) +
+                            coeffs[CY3] * (p1s[jl - 3][il] + p1s[jl + 3][il]) +
+                            coeffs[CY4] * (p1s[jl - 4][il] + p1s[jl + 4][il]) +
                             coeffs[CZ1] * (p1y[3] + p1y[5]) +
                             coeffs[CZ2] * (p1y[2] + p1y[6]) +
                             coeffs[CZ3] * (p1y[1] + p1y[7]) +
-                            coeffs[CZ4] * (p1y[0] + p1y[8])
-                           ) + 2 * p1y[4] - p0[addr];
+                            coeffs[CZ4] * (p1y[0] + p1y[8])) +
+                            2 * p1s[jl][il] - p0[addr];
     addr += stride;
   }
 }

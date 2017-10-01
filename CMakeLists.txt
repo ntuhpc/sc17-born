@@ -38,6 +38,10 @@ ADD_EXECUTABLE(Model3D model.cc)
 TARGET_LINK_LIBRARIES(RTM3D base genericCpp hypercube ${LIBTBB})
 TARGET_LINK_LIBRARIES(Model3D base genericCpp hypercube ${LIBTBB})
 
+set(CUDA_HOST_COMPILER g++)
+set(CUDA_PROPAGATE_HOST_FLAGS off)
+CUDA_ADD_EXECUTABLE(TEST test.cu)
+TARGET_LINK_LIBRARIES(TEST base)
 
 add_subdirectory(util)
 install(TARGETS Model3D RTM3D DESTINATION bin)

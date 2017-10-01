@@ -67,43 +67,44 @@ void process_error(const cudaError_t &error, char *string = 0,
 
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
-    p[srcgeom_gpu0[ix]] +=
-        dir_gpu *
-        (sinc_s_table[isinc * nsinc_gpu] * source_gpu0[ntrace_gpu * ix + it] +
-         sinc_s_table[isinc * nsinc_gpu + 1] * source_gpu0[ntrace_gpu * ix + it + 1] +
-         sinc_s_table[isinc * nsinc_gpu + 2] * source_gpu0[ntrace_gpu * ix + it + 2] +
-         sinc_s_table[isinc * nsinc_gpu + 3] * source_gpu0[ntrace_gpu * ix + it + 3] +
-         sinc_s_table[isinc * nsinc_gpu + 4] * source_gpu0[ntrace_gpu * ix + it + 4] +
-         sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
-         sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
-         sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
+  //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]);
+  p[srcgeom_gpu0[ix]] += dir_gpu *
+      (sinc_s_table[isinc * nsinc_gpu] * source_gpu0[ntrace_gpu * ix + it] +
+       sinc_s_table[isinc * nsinc_gpu + 1] * source_gpu0[ntrace_gpu * ix + it + 1] +
+       sinc_s_table[isinc * nsinc_gpu + 2] * source_gpu0[ntrace_gpu * ix + it + 2] +
+       sinc_s_table[isinc * nsinc_gpu + 3] * source_gpu0[ntrace_gpu * ix + it + 3] +
+       sinc_s_table[isinc * nsinc_gpu + 4] * source_gpu0[ntrace_gpu * ix + it + 4] +
+       sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
+       sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
+       sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
+  //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]);
 }
 
 // NOTE: THIS IS WRONG
-extern "C" __global__ void new_src_inject2_kernel(int it, int isinc, float *p) {
-  int j = blockIdx.y * blockDim.y + threadIdx.y;
-  int k = blockIdx.x * blockDim.x + threadIdx.x;
-  int i = k + n1gpu * j;
-  if (i < rec_nx_gpu * rec_ny_gpu) {
-    p[srcgeom_gpu0[i]] += dir_gpu * (sinc_s_table[0] *
-                                         source_gpu0[ntblock_gpu * i + it] +
-                                     sinc_s_table[1] *
-                                         source_gpu0[ntblock_gpu * i + it + 1] +
-                                     sinc_s_table[2] *
-                                         source_gpu0[ntblock_gpu * i + it + 2] +
-                                     sinc_s_table[3] *
-                                         source_gpu0[ntblock_gpu * i + it + 3] +
-                                     sinc_s_table[4] *
-                                         source_gpu0[ntblock_gpu * i + it + 4] +
-                                     sinc_s_table[5] *
-                                         source_gpu0[ntblock_gpu * i + it + 5] +
-                                     sinc_s_table[6] *
-                                         source_gpu0[ntblock_gpu * i + it + 6] +
-                                     sinc_s_table[7] *
-                                         source_gpu0[ntblock_gpu * i + it + 7]
-                                    );
-  }
-}
+//extern "C" __global__ void new_src_inject2_kernel(int it, int isinc, float *p) {
+//  int j = blockIdx.y * blockDim.y + threadIdx.y;
+//  int k = blockIdx.x * blockDim.x + threadIdx.x;
+//  int i = k + n1gpu * j;
+//  if (i < rec_nx_gpu * rec_ny_gpu) {
+//    p[srcgeom_gpu0[i]] += dir_gpu * (sinc_s_table[0] *
+//                                         source_gpu0[ntblock_gpu * i + it] +
+//                                     sinc_s_table[1] *
+//                                         source_gpu0[ntblock_gpu * i + it + 1] +
+//                                     sinc_s_table[2] *
+//                                         source_gpu0[ntblock_gpu * i + it + 2] +
+//                                     sinc_s_table[3] *
+//                                         source_gpu0[ntblock_gpu * i + it + 3] +
+//                                     sinc_s_table[4] *
+//                                         source_gpu0[ntblock_gpu * i + it + 4] +
+//                                     sinc_s_table[5] *
+//                                         source_gpu0[ntblock_gpu * i + it + 5] +
+//                                     sinc_s_table[6] *
+//                                         source_gpu0[ntblock_gpu * i + it + 6] +
+//                                     sinc_s_table[7] *
+//                                         source_gpu0[ntblock_gpu * i + it + 7]
+//                                    );
+//  }
+//}
 extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
   int j = blockIdx.y * blockDim.y + threadIdx.y;
   int k = blockIdx.x * blockDim.x + threadIdx.x;
@@ -117,7 +118,7 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
          sinc_d_table[isinc * nsinc_gpu + 4] * data_gpu0[ntrace_gpu * i + it + 4] +
          sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
          sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
-         sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]
+         sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
     //p[datageom_gpu0[i]] += dir_gpu * (sinc_d_table[isinc * nsinc_gpu] *
     //                                      data_gpu0[ntblock_gpu * i + it] +
     //                                  sinc_d_table[isinc * nsinc_gpu + 1] *
@@ -134,7 +135,6 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
     //                                      data_gpu0[ntblock_gpu * i + it + 6] +
     //                                  sinc_d_table[isinc * nsinc_gpu + 7] *
     //                                      data_gpu0[ntblock_gpu * i + it + 7]
-                                     );
   }
 }
 
@@ -231,7 +231,6 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
   _jt = jt;
   // TODO: check this
   float sc = (float)dir / (float)_jt;
-  fprintf(stderr, "dir/jt is %f\n in source_prop\n", sc);
 
   int n_bytes_gpu = (n1 * n2 * n3 + lead_pad) * sizeof(float);
 
@@ -257,7 +256,9 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
   int nblocks2 = (n2 - 2 * FAT) / BLOCKY_SIZE;
 
   dim3 dimBlock(BLOCKX_SIZE, BLOCKY_SIZE);
-  dim3 dimGrid(nblocks1, nblocks2);
+  //dim3 dimGrid(nblocks1, nblocks2);
+  dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
+                (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
 
   // Define separate streams for overlapping communication
   cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
@@ -346,18 +347,27 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
     for (int i = 0; i < n_gpus; i++) {
       cudaSetDevice(device[i]);
 
+	  fprintf(stderr, "wave kernel from %d, range is %d\n", offset_internal[i], (end3[i] - start3[i]));
       wave_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
           src_p0[i] + offset_internal[i], src_p1[i] + offset_internal[i],
           src_p0[i] + offset_internal[i], velocity[i] + offset_internal[i],
           start3[i], end3[i]);
+  error = cudaGetLastError();
+  process_error(error, "wave_kernel\n");
       if (i == shot_gpu) // TODO: should this shot_gpu change?
         if (id + 7 < ntsource_internal)
+		{
+          fprintf(stderr, "src inject kernel with %d sources\n", npts_internal);
           new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
               id, ii, src_p0[i] + lead_pad);
+  error = cudaGetLastError();
+  process_error(error, "src_inject\n");
+		}
     }
+	//if (it > 10)
+	//	break;
 
     // Overlap internal computation with halo communication
-
     // Send halos to the 'right'
     for (int i = 0; i < n_gpus - 1; i++) {
       cudaMemcpyPeerAsync(src_p0[i + 1] + offset_rcv_h1, i + 1,
@@ -888,10 +898,10 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   int nblocks2 = (n2 - 2 * FAT) / BLOCKX_SIZE;
   // int nblocks3=(n3-2*FAT)/BLOCKY_SIZE;
 
-  dim3 dimGrid(nblocks1, nblocks2);
+  //dim3 dimGrid(nblocks1, nblocks2);
   dim3 dimBlock(16, 16);
 
-  dim3 dimGridx((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
+  dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
                 (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
 
   cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
@@ -1049,7 +1059,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 
     cudaSetDevice(device[0]);
     if (id + 7 < ntsource_internal)
-      new_data_inject_kernel<<<dimGridx, dimBlock, 0, stream_internal[0]>>>(
+      new_data_inject_kernel<<<dimGrid, dimBlock, 0, stream_internal[0]>>>(
           id, ii, data_p0[0] /*+offset_snd_h1*/);
 
     if (ii == 0) {
