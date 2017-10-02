@@ -14,10 +14,13 @@ gpuProp::gpuProp(std::shared_ptr<SEP::genericIO> io) {
 void gpuProp::setNtblock(int nb) { set_ntblock(nb); }
 void gpuProp::transferSincTableD(int nsinc, int jtd,
                                  std::vector<std::vector<float>> &table) {
-  std::vector<float *> table_ptrs(table.size());
-  for (size_t i = 0; i < table.size(); ++i)
-    table_ptrs.at(i) = table.at(i).data();
-  transfer_sinc_table_d(nsinc, jtd, table_ptrs.data());
+  std::vector<float> flat_table;
+  for (auto&& single_table : table) {
+	  for (auto&& num : single_table) {
+		  flat_table.push_back(num);
+	  }
+  }
+  transfer_sinc_table_d(nsinc, jtd, flat_table.data());
 }
 void gpuProp::transferSourceFunc(int npts, int nt_big, std::vector<int> &locs,
                                  float *vals) {
@@ -53,10 +56,13 @@ void gpuProp::rtmAdjoint(int n1, int n2, int n3, int jtd, float *p0, float *p1,
 }
 void gpuProp::transferSincTableS(int nsinc, int jts,
                                  std::vector<std::vector<float>> &table) {
-  std::vector<float *> table_ptrs(table.size());
-  for (size_t i = 0; i < table.size(); ++i)
-    table_ptrs.at(i) = table.at(i).data();
-  transfer_sinc_table_s(nsinc, jts, table_ptrs.data());
+  std::vector<float> flat_table;
+  for (auto&& single_table : table) {
+	  for (auto&& num : single_table) {
+		  flat_table.push_back(num);
+	  }
+  }
+  transfer_sinc_table_s(nsinc, jts, flat_table.data());
 }
 void gpuProp::createSpace(float d1, float d2, float d3, float bc_a, float bc_b,
                           float bc_y, int nx, int ny, int nz) {

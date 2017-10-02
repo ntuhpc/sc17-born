@@ -68,6 +68,20 @@ void process_error(const cudaError_t &error, char *string = 0,
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
   //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]);
+//  printf("source %d, dir_gpu: %f, sources: %08x %08x %08x %08x, index start %d\n", ix, dir_gpu,
+//		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it]),
+//		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 1]),
+//		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 2]),
+//		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 3]),
+//		  ntrace_gpu * ix + it
+//		  );
+//  printf("sinc_s_table index: %d", isinc * nsinc_gpu);
+//  printf("sinc_s_table: %08x %08x %08x %08x\n",
+//		  *((uint32_t*)&sinc_s_table[isinc * nsinc_gpu]),
+//		  *((uint32_t*)&sinc_s_table[isinc * nsinc_gpu + 1]),
+//		  *((uint32_t*)&sinc_s_table[isinc * nsinc_gpu + 2]),
+//		  *((uint32_t*)&sinc_s_table[isinc * nsinc_gpu + 3])
+//		  );
   p[srcgeom_gpu0[ix]] += dir_gpu *
       (sinc_s_table[isinc * nsinc_gpu] * source_gpu0[ntrace_gpu * ix + it] +
        sinc_s_table[isinc * nsinc_gpu + 1] * source_gpu0[ntrace_gpu * ix + it + 1] +
@@ -370,7 +384,7 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
   process_error(error, "src_inject\n");
 		}
     }
-	//if (it > 5)
+	//if (it > 0)
 		//break;
 
     // Overlap internal computation with halo communication
@@ -1076,15 +1090,17 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 
     cudaSetDevice(device[0]);
     //if (id + 7 < ntsource_internal)
-      new_data_inject_kernel<<<dimGrid, dimBlock, 0, stream_internal[0]>>>(
+	dim3 dimGridDataInject((n1 + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
+			(n2 + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
+      new_data_inject_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[0]>>>(
           id, ii, data_p0[0] /*+offset_snd_h1*/);
 
     if (ii == 0) {
       for (int i = 0; i < n_gpus; i++) {
         cudaSetDevice(device[i]);
-		dim3 dimBlkImg(16, 16);
-		dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
-        img_kernel<<<dimGridImg, dimBlkImg, 0, stream_internal[i]>>>(
+		//dim3 dimBlkImg(16, 16);
+		//dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
+        img_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[i]>>>(
             img_gpu[i] + lead_pad, data_p0[i] + lead_pad, src_p0[i] + lead_pad);
 		//img_kernel<<<,,0, stream_internal[i]>>>(
 		//	img_gpu[i], data_p0[i], src_p0[i], n1 * n2 * n3);
@@ -1146,28 +1162,33 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   cudaFree(datageom_gpu);
 }
 
-void transfer_sinc_table_s(int nsinc, int ns, float **tables) {
+void transfer_sinc_table_s(int nsinc, int ns, float *tables) {
   cudaSetDevice(0);
-  float *tmp_table1 = (float *)malloc(sizeof(float) * nsinc * ns);
-  for (int i = 0; i < ns; i++)
-    memcpy((tmp_table1 + nsinc * i), tables[i], nsinc * sizeof(float));
+  fprintf(stderr, "sinc_table_s on CPU: %08x %08x %08x %08x\n",
+		  (*(uint32_t*)&tables[0]),
+		  (*(uint32_t*)&tables[1]),
+		  (*(uint32_t*)&tables[2]),
+		  (*(uint32_t*)&tables[3]));
+  //float *tmp_table1 = (float *)malloc(sizeof(float) * nsinc * ns);
+  //for (int i = 0; i < ns; i++)
+    //memcpy((tmp_table1 + nsinc * i), tables[i], nsinc * sizeof(float));
   cudaMalloc((void **)&sincstable, ns * nsinc * sizeof(float));
-  cudaMemcpy(sincstable, tmp_table1, ns * nsinc * sizeof(float),
+  cudaMemcpy(sincstable, tables, ns * nsinc * sizeof(float),
              cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(sinc_s_table, &sincstable, sizeof(float *));
-  free(tmp_table1);
+  //free(tmp_table1);
   cudaMemcpyToSymbol(nsinc_gpu, &nsinc, sizeof(int));
 }
-void transfer_sinc_table_d(int nsinc, int nd, float **tabled) {
+void transfer_sinc_table_d(int nsinc, int nd, float *tabled) {
   cudaSetDevice(0);
-  float *tmp_table2 = (float *)malloc(sizeof(float) * nsinc * nd);
-  for (int i = 0; i < nd; i++)
-    memcpy((tmp_table2 + nsinc * i), tabled[i], nsinc * sizeof(float));
+  //float *tmp_table2 = (float *)malloc(sizeof(float) * nsinc * nd);
+  //for (int i = 0; i < nd; i++)
+    //memcpy((tmp_table2 + nsinc * i), tabled[i], nsinc * sizeof(float));
   cudaMalloc((void **)&sincdtable, nd * nsinc * sizeof(float));
-  cudaMemcpy(sincdtable, tmp_table2, nd * nsinc * sizeof(float),
+  cudaMemcpy(sincdtable, tabled, nd * nsinc * sizeof(float),
              cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(sinc_d_table, &sincdtable, sizeof(float *));
-  free(tmp_table2);
+  //free(tmp_table2);
 }
 void load_source(int it) {
   int ibeg = it;

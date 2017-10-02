@@ -16,9 +16,9 @@ void rtm_forward(int n1, int n2, int n3, int jt, float *img, float *dat,
                  int npts_src, int nt, int nt_big, int nx, int ny);
 
 void transfer_sinc_table_s(int nsinc, int ns,
-                           float **tables);  // cleaned up, no y dim needed
+                           float *tables);  // cleaned up, no y dim needed
 
-void transfer_sinc_table_d(int nsinc, int ns, float **tabled);  // nothing to do
+void transfer_sinc_table_d(int nsinc, int ns, float *tabled);  // nothing to do
 
 void transfer_source_func(int npts, int nt, int *locs,
                           float *vals);  //(think) nothing to do

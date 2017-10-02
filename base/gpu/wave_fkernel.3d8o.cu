@@ -279,6 +279,8 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
            threadIdx.x;  // Global coordinates for the fastest two axes
   int jg = blockIdx.y * blockDim.y + threadIdx.y;
 
+  if (ig >= n1gpu - 2 * radius || jg >= n2gpu - 2 * radius) return;
+
   int stride = n1gpu * n2gpu;  // Number of elements between wavefield slices
   int edge = 0;
   // TODO: check
