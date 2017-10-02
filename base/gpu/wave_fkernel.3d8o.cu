@@ -282,37 +282,38 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
   if (ig >= n1gpu - 2 * radius || jg >= n2gpu - 2 * radius) return;
 
   int stride = n1gpu * n2gpu;  // Number of elements between wavefield slices
+  int addr = ig + n1gpu * jg;
   int edge = 0;
   // TODO: check
   int bc_agpu=40;
   float bc_bgpu=0.0005;
 
-  for (int zg = 0; zg < n3gpu; zg++) {
+  // damp halo + internal region
+  for (int zg = start3; zg < end3; zg++) {
+	// damp all
     if (n_gpus == 1)
       edge = min2(
-          ig - FAT,
-          min2(zg - FAT, min2(min2(n2gpu - FAT - jg, n1gpu - FAT - ig),
-                              min2(n3gpu - FAT - zg, jg - FAT))));  // Damp all
+          ig,
+          min2(zg - start3, min2(min2(n2gpu - 2 * radius - jg, n1gpu - 2 * radius - ig),
+                              min2(end3 - zg, jg))));  // Damp all
     else if (gpu_id == 0)
-      edge = min2(ig - FAT,
-                  min2(zg - FAT, min2(min2(n2gpu - FAT - jg, n1gpu - FAT - ig),
-                                      jg - FAT)));  // Don't damp bottom
+      edge = min2(ig,
+                  min2(zg - start3, min2(min2(n2gpu - 2 * radius - jg, n1gpu - 2 * radius - ig),
+                                      jg)));  // Don't damp bottom
     else if (gpu_id == (n_gpus - 1))
-      edge = min2(ig - FAT,
-                  min2(min2(n2gpu - FAT - jg, n1gpu - FAT - ig),
-                       min2(n3gpu - FAT - zg, jg - FAT)));  // Don't damp top
+      edge = min2(ig,
+                  min2(min2(n2gpu - 2 * radius - jg, n1gpu - 2 * radius - ig),
+                       min2(end3 - zg, jg)));  // Don't damp top
     else
-      edge = min2(ig - FAT, min2(min2(n2gpu - FAT - jg, n1gpu - FAT - ig),
-                                 jg - FAT));  // Don't damp top or bottom
-    // edge=min2(ig-FAT,
-    // min2(zg-FAT,min2(min2(n2gpu-FAT-jg,n1gpu-FAT-ig),min2(n3gpu-FAT-zg,jg-FAT))));
+      edge = min2(ig, min2(min2(n2gpu - 2 * radius - jg, n1gpu - 2 * radius - ig),
+                                 jg));  // Don't damp top or bottom
     if (edge >= 0 && edge < 40) {
-      int addr = ig + n1gpu * jg + stride * zg;
       float temp = expf(-bc_bgpu * (bc_agpu - edge));
       //if (temp < 1.) {
         p1[addr] *= temp;
         p0[addr] *= temp;
       //}
+	  addr += stride;
     }
   }
 }

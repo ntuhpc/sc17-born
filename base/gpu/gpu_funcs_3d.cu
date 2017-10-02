@@ -11,7 +11,7 @@ int ntblock_internal;
 
 float *source_buf;
 int _jt;
-int npts_internal, source_blocked, ntsource_internal;
+int npts_internal, source_blocked, ntsource_internal, ntreceiver_internal;
 int rec_nx, rec_ny, _jtsS, _jtdD;
 
 // void setup_cuda(int ngpus, int argc, char **argv){
@@ -95,31 +95,6 @@ extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]);
 }
 
-// NOTE: THIS IS WRONG
-//extern "C" __global__ void new_src_inject2_kernel(int it, int isinc, float *p) {
-//  int j = blockIdx.y * blockDim.y + threadIdx.y;
-//  int k = blockIdx.x * blockDim.x + threadIdx.x;
-//  int i = k + n1gpu * j;
-//  if (i < rec_nx_gpu * rec_ny_gpu) {
-//    p[srcgeom_gpu0[i]] += dir_gpu * (sinc_s_table[0] *
-//                                         source_gpu0[ntblock_gpu * i + it] +
-//                                     sinc_s_table[1] *
-//                                         source_gpu0[ntblock_gpu * i + it + 1] +
-//                                     sinc_s_table[2] *
-//                                         source_gpu0[ntblock_gpu * i + it + 2] +
-//                                     sinc_s_table[3] *
-//                                         source_gpu0[ntblock_gpu * i + it + 3] +
-//                                     sinc_s_table[4] *
-//                                         source_gpu0[ntblock_gpu * i + it + 4] +
-//                                     sinc_s_table[5] *
-//                                         source_gpu0[ntblock_gpu * i + it + 5] +
-//                                     sinc_s_table[6] *
-//                                         source_gpu0[ntblock_gpu * i + it + 6] +
-//                                     sinc_s_table[7] *
-//                                         source_gpu0[ntblock_gpu * i + it + 7]
-//                                    );
-//  }
-//}
 extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
   int j = blockIdx.y * blockDim.y + threadIdx.y;
   int k = blockIdx.x * blockDim.x + threadIdx.x;
@@ -134,22 +109,6 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
          sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
          sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
          sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
-    //p[datageom_gpu0[i]] += dir_gpu * (sinc_d_table[isinc * nsinc_gpu] *
-    //                                      data_gpu0[ntblock_gpu * i + it] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 1] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 1] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 2] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 2] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 3] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 3] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 4] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 4] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 5] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 5] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 6] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 6] +
-    //                                  sinc_d_table[isinc * nsinc_gpu + 7] *
-    //                                      data_gpu0[ntblock_gpu * i + it + 7]
   }
 }
 
@@ -920,21 +879,8 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   int nblocks2 = (n2 - 2 * FAT + BLOCKY_SIZE - 1) / BLOCKY_SIZE;
   int last_x_block = nblocks1 - 1;
   int last_y_block = nblocks2 - 1;
-
   dim3 dimBlock(BLOCKX_SIZE, BLOCKY_SIZE);
   dim3 dimGrid(nblocks1, nblocks2);
-  //dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
-  //              (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
-  fprintf(stderr, "Kernel launch size is %d * %d\n", dimGrid.x, dimGrid.y);
-  //int nblocks1 = (n1 - 2 * FAT) / BLOCKZ_SIZE;
-  //int nblocks2 = (n2 - 2 * FAT) / BLOCKX_SIZE;
-  //// int nblocks3=(n3-2*FAT)/BLOCKY_SIZE;
-
-  ////dim3 dimGrid(nblocks1, nblocks2);
-  //dim3 dimBlock(16, 16);
-
-  //dim3 dimGrid((int)ceilf(1. * (n1 - 2 * FAT) / BLOCKX_SIZE),
-  //              (int)ceilf(1. * (n2 - 2 * FAT) / BLOCKY_SIZE));
 
   cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
   cudaEvent_t start, stop;
@@ -974,12 +920,9 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   int id_s = (nt + 1) / jt;
   int i_s = nt + 1 - id_s * jt;
 
-  // new_src_inject_kernel<<<1,npts_src>>>(id_s,i_s,src_p0[0]+lead_pad);
-
-  // float *snap;
-  // snap=(float*)malloc(4*n1*n2*n3_total);
-
   // main loop
+  int data_counter = 0;
+  int src_counter = 0;
   for (int it = nt - 1; it >= 0; it--) {
     id_s = (it + 1) / _jtsS;
     i_s = it + 1 - id_s * _jtsS;
@@ -1046,23 +989,25 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
             src_p0[i] + offset_internal[i], velocity[i] + offset_internal[i],
             start3[i], end3[i], last_x_block, last_y_block);
         if (i == shot_gpu) {
-          if (id_s + 7 < ntsource_internal)
-          // new_src_inject_kernel<<<1,npts_src,0,stream_internal[i]>>>(id_s,i_s,
-          // src_p1[i]+lead_pad); //p1??
-            //if (npts_src < 100) {
+			if (id_s + 7 < ntsource_internal) {
               new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
                   id_s, i_s, src_p1[i] + lead_pad);
-            //}
-            //else
-            //{
-            //  new_src_inject2_kernel<<<dimGridx,dimBlock,0,stream_internal[i]>>>(
-            //      id_s,i_s,src_p1[i]+lead_pad);
-            //}
+			  fprintf(stderr, "id_s: %d, ntsource_internal: %d\n", id_s, ntsource_internal);
+			  src_counter++;
+			}
         }
       }
-      // TODO: where should we put this?
-      damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i], data_p1[i], start3[i], end3[i], i, n_gpus);
+	  if (i == 0)
+        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i] + radius, i, n_gpus);
+	  else if (i == n_gpus - 1)
+        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i], i, n_gpus);
+	  else
+        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i] + radius, i, n_gpus);
+	  // TODO: determine if sync is necessary
+	  cudaStreamSynchronize(stream_internal[i]);
     }
 
     for (int i = 1; i < n_gpus; i++) {
@@ -1090,21 +1035,26 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
                             n1 * n2 * radius * sizeof(float), stream_halo[i]);
     }
 
+      // TODO: where should we put this?
+	for (int i = 0; i < n_gpus - 1; i++)
+	{
+	  cudaSetDevice(i);
+	}
     cudaSetDevice(device[0]);
 	dim3 dimGridDataInject((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
 			(rec_ny + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
-    if (id + 7 < ntsource_internal)
+	if (id + 7 < ntreceiver_internal) {
       new_data_inject_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[0]>>>(
           id, ii, data_p0[0] /*+offset_snd_h1*/);
+	  data_counter++;
+	}
 
-    //if (ii == 0) {
       for (int i = 0; i < n_gpus; i++) {
         cudaSetDevice(device[i]);
 		dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
         img_kernel<<<dimGridImg, dimBlock, 0, stream_internal[i]>>>(
             img_gpu[i] + lead_pad, data_p0[i] + lead_pad, src_p0[i] + lead_pad);
       }
-    //}
 
     for (int i = 0; i < n_gpus; i++) {
       cudaSetDevice(i);
@@ -1117,6 +1067,8 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
       data_p0[i] = ptemp2;
     }
   }
+
+  fprintf(stderr, "Number of source injects: %d, number of data injects: %d", src_counter, data_counter);
 
   error = cudaGetLastError();
   process_error(error, "kernel");
@@ -1136,13 +1088,8 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(i);
     fprintf(stderr, "CHECK2 %d %d %d \n", n1, n2, n3);
-    cudaMemcpy(
-        img + i * n1 * n2 * (n3 - 2 * radius), img_gpu[i] /*+radius*n1*n2*/,
+    cudaMemcpy(img + i * n1 * n2 * (n3 - 2 * radius), img_gpu[i] /*+radius*n1*n2*/,
         n1 * n2 * (n3 /*-2*radius*/) * sizeof(float), cudaMemcpyDeviceToHost);
-    // cudaMemcpy(img+i*n1*n2*(n3-2*radius), img_gpu[i]+radius*n1*n2,
-    // n1*n2*(n3-2*radius)*sizeof(float), cudaMemcpyDeviceToHost);  cudaMemcpy(
-    // img_gpu[i]/*+radius*n1*n2*/, img+i*n1*n2*(n3-2*radius),
-    // n1*n2*(n3/*-2*radius*/)*sizeof(float), cudaMemcpyHostToDevice);
   }
 
   for (int i = 0; i < n_gpus; i++) {
@@ -1160,57 +1107,45 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 void transfer_sinc_table_s(int nsinc, int ns, float *tables) {
   _jtsS = ns;
   cudaSetDevice(0);
-  fprintf(stderr, "sinc_table_s on CPU: %08x %08x %08x %08x\n",
-		  (*(uint32_t*)&tables[0]),
-		  (*(uint32_t*)&tables[1]),
-		  (*(uint32_t*)&tables[2]),
-		  (*(uint32_t*)&tables[3]));
-  //float *tmp_table1 = (float *)malloc(sizeof(float) * nsinc * ns);
-  //for (int i = 0; i < ns; i++)
-    //memcpy((tmp_table1 + nsinc * i), tables[i], nsinc * sizeof(float));
   cudaMalloc((void **)&sincstable, ns * nsinc * sizeof(float));
-  cudaMemcpy(sincstable, tables, ns * nsinc * sizeof(float),
-             cudaMemcpyHostToDevice);
+  cudaMemcpy(sincstable, tables, ns * nsinc * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(sinc_s_table, &sincstable, sizeof(float *));
-  //free(tmp_table1);
   cudaMemcpyToSymbol(nsinc_gpu, &nsinc, sizeof(int));
 }
+
 void transfer_sinc_table_d(int nsinc, int nd, float *tabled) {
   _jtdD = nd;
   cudaSetDevice(0);
-  //float *tmp_table2 = (float *)malloc(sizeof(float) * nsinc * nd);
-  //for (int i = 0; i < nd; i++)
-    //memcpy((tmp_table2 + nsinc * i), tabled[i], nsinc * sizeof(float));
   cudaMalloc((void **)&sincdtable, nd * nsinc * sizeof(float));
-  cudaMemcpy(sincdtable, tabled, nd * nsinc * sizeof(float),
-             cudaMemcpyHostToDevice);
+  cudaMemcpy(sincdtable, tabled, nd * nsinc * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpyToSymbol(sinc_d_table, &sincdtable, sizeof(float *));
-  //free(tmp_table2);
 }
-void load_source(int it) {
-  int ibeg = it;
-  int iend = it + ntblock_internal + 7;
-  int ntb = ntblock_internal + 7;
-  if (iend > ntsource_internal) iend = ntsource_internal;
-  float *vals = (float *)malloc(ntb * sizeof(float) * npts_internal);
-  float sm = 0;
-  for (int ipt = 0; ipt < npts_internal; ipt++) {
-    memcpy(&vals[ipt * ntb], &source_buf[it + ntsource_internal * ipt],
-           (iend - ibeg) * sizeof(float));
-    for (int i = 0; i < iend - ibeg; i++) {
-      sm += fabs(vals[i + (iend - ibeg) * ipt]);
-    }
-    if (iend - ibeg < ntblock_internal + 7) {
-      for (int it = 0; it < ntblock_internal - 7 - (iend - ibeg); it++) {
-        vals[ipt * ntb + (iend - ibeg) + it] = 0.;
-      }
-    }
-  }
-  fprintf(stderr, "SM LOAD SOUrCE %f \n", sm);
-  cudaMemcpy(source_gpu, vals, ntb * npts_internal * sizeof(float),
-             cudaMemcpyHostToDevice);
-  free(vals);
-}
+
+//void load_source(int it) {
+//  int ibeg = it;
+//  int iend = it + ntblock_internal + 7;
+//  int ntb = ntblock_internal + 7;
+//  if (iend > ntsource_internal) iend = ntsource_internal;
+//  float *vals = (float *)malloc(ntb * sizeof(float) * npts_internal);
+//  float sm = 0;
+//  for (int ipt = 0; ipt < npts_internal; ipt++) {
+//    memcpy(&vals[ipt * ntb], &source_buf[it + ntsource_internal * ipt],
+//           (iend - ibeg) * sizeof(float));
+//    for (int i = 0; i < iend - ibeg; i++) {
+//      sm += fabs(vals[i + (iend - ibeg) * ipt]);
+//    }
+//    if (iend - ibeg < ntblock_internal + 7) {
+//      for (int it = 0; it < ntblock_internal - 7 - (iend - ibeg); it++) {
+//        vals[ipt * ntb + (iend - ibeg) + it] = 0.;
+//      }
+//    }
+//  }
+//  fprintf(stderr, "SM LOAD SOUrCE %f \n", sm);
+//  cudaMemcpy(source_gpu, vals, ntb * npts_internal * sizeof(float),
+//             cudaMemcpyHostToDevice);
+//  free(vals);
+//}
+
 void set_ntblock(int nblock) {
   cudaSetDevice(device[0]);
   ntblock_internal = nblock;
@@ -1256,6 +1191,7 @@ void transfer_source_func(int npts, int nt, int *locs, float *vals) {
 }
  
 void transfer_receiver_func(int nx, int ny, int nt, int *locs, float *vals) {
+  ntreceiver_internal = nt;
   cudaSetDevice(device[0]);
   cudaMalloc((void**) &data_gpu,nt*nx*ny*sizeof(float));
   //cudaMalloc((void **)&data_gpu,
