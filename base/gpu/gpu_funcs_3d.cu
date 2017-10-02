@@ -12,6 +12,7 @@ int ntblock_internal;
 float *source_buf;
 int _jt;
 int npts_internal, source_blocked, ntsource_internal;
+int rec_nx, rec_ny, _jtsS, _jtdD;
 
 // void setup_cuda(int ngpus, int argc, char **argv){
 void setup_cuda(int ngpus) {
@@ -338,8 +339,8 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
 
   int src_counter = 0;
   for (int it = 0; it <= nt; it++) {
-    int id = it / jt; // TODO: check if this "jt" is correct
-    int ii = it - id * jt;
+    int id = it / _jtsS;
+    int ii = it - id * _jtsS;
 
     // Calculate the halo regions first
     for (int i = 0; i < n_gpus; i++) {
@@ -978,11 +979,12 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   // float *snap;
   // snap=(float*)malloc(4*n1*n2*n3_total);
 
+  // main loop
   for (int it = nt - 1; it >= 0; it--) {
-    id_s = (it + 1) / jt;
-    i_s = it + 1 - id_s * jt;
-    int id = it / jt;
-    int ii = it - id * jt;
+    id_s = (it + 1) / _jtsS;
+    i_s = it + 1 - id_s * _jtsS;
+    int id = it / _jtdD;
+    int ii = it - id * _jtdD;
 
     // halo region
     for (int i = 0; i < n_gpus; i++) {
@@ -1089,37 +1091,30 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
     }
 
     cudaSetDevice(device[0]);
-    //if (id + 7 < ntsource_internal)
-	dim3 dimGridDataInject((n1 + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
-			(n2 + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
+	dim3 dimGridDataInject((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
+			(rec_ny + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
+    if (id + 7 < ntsource_internal)
       new_data_inject_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[0]>>>(
           id, ii, data_p0[0] /*+offset_snd_h1*/);
 
-    if (ii == 0) {
+    //if (ii == 0) {
       for (int i = 0; i < n_gpus; i++) {
         cudaSetDevice(device[i]);
-		//dim3 dimBlkImg(16, 16);
-		//dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
-        img_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[i]>>>(
+		dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
+        img_kernel<<<dimGridImg, dimBlock, 0, stream_internal[i]>>>(
             img_gpu[i] + lead_pad, data_p0[i] + lead_pad, src_p0[i] + lead_pad);
-		//img_kernel<<<,,0, stream_internal[i]>>>(
-		//	img_gpu[i], data_p0[i], src_p0[i], n1 * n2 * n3);
       }
-    }
+    //}
 
     for (int i = 0; i < n_gpus; i++) {
       cudaSetDevice(i);
       cudaDeviceSynchronize();
-      //if (it < nt - 1) {
-        ptemp = src_p0[i];
-        src_p0[i] = src_p1[i];
-        src_p1[i] = ptemp;
-      //}
-	  //if (it > 0) {
-        ptemp2 = data_p1[i];
-        data_p1[i] = data_p0[i];
-        data_p0[i] = ptemp2;
-	  //}
+      ptemp = src_p0[i];
+      src_p0[i] = src_p1[i];
+      src_p1[i] = ptemp;
+      ptemp2 = data_p1[i];
+      data_p1[i] = data_p0[i];
+      data_p0[i] = ptemp2;
     }
   }
 
@@ -1152,8 +1147,8 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(i);
-    cudaFree(data_p0[i]);
     cudaFree(img_gpu[i]);
+    cudaFree(data_p0[i]);
     cudaFree(data_p1[i]);
     cudaFree(src_p0[i]);
     cudaFree(src_p1[i]);
@@ -1163,6 +1158,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 }
 
 void transfer_sinc_table_s(int nsinc, int ns, float *tables) {
+  _jtsS = ns;
   cudaSetDevice(0);
   fprintf(stderr, "sinc_table_s on CPU: %08x %08x %08x %08x\n",
 		  (*(uint32_t*)&tables[0]),
@@ -1180,6 +1176,7 @@ void transfer_sinc_table_s(int nsinc, int ns, float *tables) {
   cudaMemcpyToSymbol(nsinc_gpu, &nsinc, sizeof(int));
 }
 void transfer_sinc_table_d(int nsinc, int nd, float *tabled) {
+  _jtdD = nd;
   cudaSetDevice(0);
   //float *tmp_table2 = (float *)malloc(sizeof(float) * nsinc * nd);
   //for (int i = 0; i < nd; i++)
@@ -1273,6 +1270,7 @@ void transfer_receiver_func(int nx, int ny, int nt, int *locs, float *vals) {
   //   cudaMemcpyHostToDevice);
   cudaMemcpy(data_gpu, vals,(long long)nt*(long long)nx*(long long)ny*sizeof(float),
      cudaMemcpyHostToDevice);
+  rec_nx = nx; rec_ny = ny;
   cudaMemcpyToSymbol(rec_nx_gpu, &nx, sizeof(int));
   cudaMemcpyToSymbol(rec_ny_gpu, &ny, sizeof(int));
   cudaMemcpyToSymbol(ntrace_gpu, &nt, sizeof(int));

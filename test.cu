@@ -78,9 +78,12 @@ int main()
 	prop(cpu_result, ref_array_cpu, vel_cpu);
 
 	// compare
-	for (int i = 0; i < 16; ++i)
+	for (int i = 0; i < 16 * 16 * 16; ++i)
 	{
-		printf("cpu at %d: %f\n", offset + i, cpu_result[offset+i]);
-		printf("gpu at %d: %f\n", offset + i, gpu_result[offset+i]);
+		if (cpu_result[offset+i] - gpu_result[offset+i] > 1e-6)
+		{
+			printf("cpu at %d: %f\n", offset + i, cpu_result[offset+i]);
+			printf("gpu at %d: %f\n", offset + i, gpu_result[offset+i]);
+		}
 	}
 }
