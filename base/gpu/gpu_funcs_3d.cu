@@ -66,9 +66,37 @@ void process_error(const cudaError_t &error, char *string = 0,
   if (error != cudaSuccess) exit(-1);
 }
 
+extern "C" __global__ void scaleup(float* array, int start, int end) {
+	int ix = blockIdx.x * blockDim.x + threadIdx.x;
+	int iy = blockIdx.y * blockDim.y + threadIdx.y;
+	if (ix > n1gpu || iy > n2gpu) return;
+
+	int idx = ix + iy * n1gpu;
+	int stride = n1gpu * n2gpu;
+
+	for (int i = start; i < end; ++i) {
+		array[idx] *= 1e6;
+		idx += stride;
+	}
+}
+
+extern "C" __global__ void scaledown(float* array, int start, int end) {
+	int ix = blockIdx.x * blockDim.x + threadIdx.x;
+	int iy = blockIdx.y * blockDim.y + threadIdx.y;
+	if (ix > n1gpu || iy > n2gpu) return;
+
+	int idx = ix + iy * n1gpu;
+	int stride = n1gpu * n2gpu;
+
+	for (int i = start; i < end; ++i) {
+		array[idx] *= 1e-6;
+		idx += stride;
+	}
+}
+
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
-  //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]);
+  printf("old source data: %f\n", p[srcgeom_gpu0[ix]]);
 //  printf("source %d, dir_gpu: %f, sources: %08x %08x %08x %08x, index start %d\n", ix, dir_gpu,
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it]),
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 1]),
@@ -92,7 +120,7 @@ extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
        sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
        sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
        sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
-  //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]);
+  printf("new source data: %f\n", p[srcgeom_gpu0[ix]]);
 }
 
 extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
@@ -997,17 +1025,6 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 			}
         }
       }
-	  if (i == 0)
-        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i] + radius, i, n_gpus);
-	  else if (i == n_gpus - 1)
-        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i], i, n_gpus);
-	  else
-        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i] + radius, i, n_gpus);
-	  // TODO: determine if sync is necessary
-	  cudaStreamSynchronize(stream_internal[i]);
     }
 
     for (int i = 1; i < n_gpus; i++) {
@@ -1035,10 +1052,20 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
                             n1 * n2 * radius * sizeof(float), stream_halo[i]);
     }
 
-      // TODO: where should we put this?
+	// damp after peer access
 	for (int i = 0; i < n_gpus - 1; i++)
 	{
 	  cudaSetDevice(i);
+	  cudaDeviceSynchronize(); // sync the halo & internal region computation
+	  if (i == 0)
+        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i] + radius, i, n_gpus);
+	  else if (i == n_gpus - 1)
+        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i], i, n_gpus);
+	  else
+        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i] + radius, i, n_gpus);
 	}
     cudaSetDevice(device[0]);
 	dim3 dimGridDataInject((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
