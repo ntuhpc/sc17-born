@@ -150,19 +150,31 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
 //}
 
     float div = coeffs[C0] * current +
-                            coeffs[CX1] * p1s[ty][tx - 1] + coeffs[CX1] * p1s[ty][tx + 1] +
-                            coeffs[CX2] * p1s[ty][tx - 2] + coeffs[CX2] * p1s[ty][tx + 2] +
-                            coeffs[CX3] * p1s[ty][tx - 3] + coeffs[CX3] * p1s[ty][tx + 3] +
-                            coeffs[CX4] * p1s[ty][tx - 4] + coeffs[CX4] * p1s[ty][tx + 4] +
-                            coeffs[CY1] * p1s[ty - 1][tx] + coeffs[CY1] * p1s[ty + 1][tx] +
-                            coeffs[CY2] * p1s[ty - 2][tx] + coeffs[CY2] * p1s[ty + 2][tx] +
-                            coeffs[CY3] * p1s[ty - 3][tx] + coeffs[CY3] * p1s[ty + 3][tx] +
-                            coeffs[CY4] * p1s[ty - 4][tx] + coeffs[CY4] * p1s[ty + 4][tx] +
-                            coeffs[CZ1] * infront1 + coeffs[CZ1] * behind1 +
-                            coeffs[CZ2] * infront2 + coeffs[CZ2] * behind2 +
-                            coeffs[CZ3] * infront3 + coeffs[CZ3] * behind3 +
-                            coeffs[CZ4] * infront4 + coeffs[CZ4] * behind4;
-    p0[out_idx] = current + current - p0[out_idx] + div * vel[out_idx];
+                            coeffs[CX1] * (p1s[ty][tx - 1] + p1s[ty][tx + 1]) +
+                            coeffs[CX2] * (p1s[ty][tx - 2] + p1s[ty][tx + 2]) +
+                            coeffs[CX3] * (p1s[ty][tx - 3] + p1s[ty][tx + 3]) +
+                            coeffs[CX4] * (p1s[ty][tx - 4] + p1s[ty][tx + 4]) +
+                            coeffs[CY1] * (p1s[ty - 1][tx] + p1s[ty + 1][tx]) +
+                            coeffs[CY2] * (p1s[ty - 2][tx] + p1s[ty + 2][tx]) +
+                            coeffs[CY3] * (p1s[ty - 3][tx] + p1s[ty + 3][tx]) +
+                            coeffs[CY4] * (p1s[ty - 4][tx] + p1s[ty + 4][tx]) +
+                            coeffs[CZ1] * (infront1 + behind1) +
+                            coeffs[CZ2] * (infront2 + behind2) +
+                            coeffs[CZ3] * (infront3 + behind3) +
+                            coeffs[CZ4] * (infront4 + behind4);
+                            //coeffs[CX1] * p1s[ty][tx - 1] + coeffs[CX1] * p1s[ty][tx + 1] +
+                            //coeffs[CX2] * p1s[ty][tx - 2] + coeffs[CX2] * p1s[ty][tx + 2] +
+                            //coeffs[CX3] * p1s[ty][tx - 3] + coeffs[CX3] * p1s[ty][tx + 3] +
+                            //coeffs[CX4] * p1s[ty][tx - 4] + coeffs[CX4] * p1s[ty][tx + 4] +
+                            //coeffs[CY1] * p1s[ty - 1][tx] + coeffs[CY1] * p1s[ty + 1][tx] +
+                            //coeffs[CY2] * p1s[ty - 2][tx] + coeffs[CY2] * p1s[ty + 2][tx] +
+                            //coeffs[CY3] * p1s[ty - 3][tx] + coeffs[CY3] * p1s[ty + 3][tx] +
+                            //coeffs[CY4] * p1s[ty - 4][tx] + coeffs[CY4] * p1s[ty + 4][tx] +
+                            //coeffs[CZ1] * infront1 + coeffs[CZ1] * behind1 +
+                            //coeffs[CZ2] * infront2 + coeffs[CZ2] * behind2 +
+                            //coeffs[CZ3] * infront3 + coeffs[CZ3] * behind3 +
+                            //coeffs[CZ4] * infront4 + coeffs[CZ4] * behind4;
+    p0[out_idx] = vel[out_idx] * div + current + current - p0[out_idx];
   }
 }
 
@@ -308,10 +320,10 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
                                  jg));  // Don't damp top or bottom
     if (edge >= 0 && edge < 40) {
       float temp = expf(-bc_bgpu * (bc_agpu - edge));
-      if (temp < 1.) {
+      //if (temp < 1.) {
         p1[addr] *= temp;
         p0[addr] *= temp;
-      }
+      //}
     }
 	addr += stride;
   }

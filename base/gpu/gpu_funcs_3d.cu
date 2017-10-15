@@ -66,37 +66,9 @@ void process_error(const cudaError_t &error, char *string = 0,
   if (error != cudaSuccess) exit(-1);
 }
 
-extern "C" __global__ void scaleup(float* array, int start, int end) {
-	int ix = blockIdx.x * blockDim.x + threadIdx.x;
-	int iy = blockIdx.y * blockDim.y + threadIdx.y;
-	if (ix > n1gpu || iy > n2gpu) return;
-
-	int idx = ix + iy * n1gpu;
-	int stride = n1gpu * n2gpu;
-
-	for (int i = start; i < end; ++i) {
-		array[idx] *= 1e6;
-		idx += stride;
-	}
-}
-
-extern "C" __global__ void scaledown(float* array, int start, int end) {
-	int ix = blockIdx.x * blockDim.x + threadIdx.x;
-	int iy = blockIdx.y * blockDim.y + threadIdx.y;
-	if (ix > n1gpu || iy > n2gpu) return;
-
-	int idx = ix + iy * n1gpu;
-	int stride = n1gpu * n2gpu;
-
-	for (int i = start; i < end; ++i) {
-		array[idx] *= 1e-6;
-		idx += stride;
-	}
-}
-
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
-  printf("old source data: %f\n", p[srcgeom_gpu0[ix]]);
+  //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
 //  printf("source %d, dir_gpu: %f, sources: %08x %08x %08x %08x, index start %d\n", ix, dir_gpu,
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it]),
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 1]),
@@ -112,15 +84,15 @@ extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
 //		  *((uint32_t*)&sinc_s_table[isinc * nsinc_gpu + 3])
 //		  );
   p[srcgeom_gpu0[ix]] += dir_gpu *
-      (sinc_s_table[isinc * nsinc_gpu] * source_gpu0[ntrace_gpu * ix + it] +
-       sinc_s_table[isinc * nsinc_gpu + 1] * source_gpu0[ntrace_gpu * ix + it + 1] +
-       sinc_s_table[isinc * nsinc_gpu + 2] * source_gpu0[ntrace_gpu * ix + it + 2] +
-       sinc_s_table[isinc * nsinc_gpu + 3] * source_gpu0[ntrace_gpu * ix + it + 3] +
-       sinc_s_table[isinc * nsinc_gpu + 4] * source_gpu0[ntrace_gpu * ix + it + 4] +
-       sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
-       sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
-       sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
-  printf("new source data: %f\n", p[srcgeom_gpu0[ix]]);
+      (1e6 * sinc_s_table[isinc * nsinc_gpu] * source_gpu0[ntrace_gpu * ix + it] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 1] * source_gpu0[ntrace_gpu * ix + it + 1] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 2] * source_gpu0[ntrace_gpu * ix + it + 2] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 3] * source_gpu0[ntrace_gpu * ix + it + 3] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 4] * source_gpu0[ntrace_gpu * ix + it + 4] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
+       1e6 * sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
+  //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
 }
 
 extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
@@ -129,14 +101,14 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
   int i = k + n1gpu * j;
   if (i < rec_nx_gpu * rec_ny_gpu) {
     p[datageom_gpu0[i]] += dir_gpu *
-		(sinc_d_table[isinc * nsinc_gpu] * data_gpu0[ntrace_gpu * i + it] +
-         sinc_d_table[isinc * nsinc_gpu + 1] * data_gpu0[ntrace_gpu * i + it + 1] +
-         sinc_d_table[isinc * nsinc_gpu + 2] * data_gpu0[ntrace_gpu * i + it + 2] +
-         sinc_d_table[isinc * nsinc_gpu + 3] * data_gpu0[ntrace_gpu * i + it + 3] +
-         sinc_d_table[isinc * nsinc_gpu + 4] * data_gpu0[ntrace_gpu * i + it + 4] +
-         sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
-         sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
-         sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
+		(1e6 * sinc_d_table[isinc * nsinc_gpu] * data_gpu0[ntrace_gpu * i + it] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 1] * data_gpu0[ntrace_gpu * i + it + 1] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 2] * data_gpu0[ntrace_gpu * i + it + 2] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 3] * data_gpu0[ntrace_gpu * i + it + 3] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 4] * data_gpu0[ntrace_gpu * i + it + 4] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
+         1e6 * sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
   }
 }
 
@@ -199,9 +171,9 @@ extern "C" __global__ void img_kernel(float *img, float *dat, float *src) {
   int addr = ig + n1gpu * jg;
   int stride = n1gpu * n2gpu;
   for (int iy = 0; iy < n3gpu; iy++) {
-    // img[addr]+=.000001*dat[addr]*src[addr];
+    img[addr] += (1e-6 * dat[addr]) * (1e-6 * src[addr]);
     // printf("%d %d %d\n", img[addr], dat[addr], src[addr]);
-    img[addr] += dat[addr] * src[addr];
+    //img[addr] += dat[addr] * src[addr];
     addr += stride;
   }
 }
@@ -1053,20 +1025,21 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
     }
 
 	// damp after peer access
-	for (int i = 0; i < n_gpus - 1; i++)
-	{
-	  cudaSetDevice(i);
+	//for (int i = 0; i < n_gpus - 1; i++)
+	//{
+	  cudaSetDevice(0);
 	  cudaDeviceSynchronize(); // sync the halo & internal region computation
-	  if (i == 0)
+	  //if (i == 0)
+	  int i = 0;
         damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i] + radius, i, n_gpus);
-	  else if (i == n_gpus - 1)
-        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i], i, n_gpus);
-	  else
-        damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
-          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i] + radius, i, n_gpus);
-	}
+          data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i], i, n_gpus);
+	  //else if (i == n_gpus - 1)
+      //  damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+      //    data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i], i, n_gpus);
+	  //else
+      //  damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+      //    data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i] - radius, end3[i] + radius, i, n_gpus);
+	//}
     cudaSetDevice(device[0]);
 	dim3 dimGridDataInject((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
 			(rec_ny + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
@@ -1267,11 +1240,11 @@ void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
   offset = radius * n1 * n2 + radius * n1 + radius + lead_pad;
 
   float coeffs_cpu[COEFFS_SIZE] =
-      get_coeffs((double)d1, (double)d2, (double)d3);
+      get_coeffs((float)d1, (float)d2, (float)d3);
 
-  dd1 = 1. / (double)d1 / (double)d1;
-  dd2 = 1. / (double)d2 / (double)d2;
-  dd3 = 1. / (double)d3 / (double)d3;
+  //dd1 = 1. / (double)d1 / (double)d1;
+  //dd2 = 1. / (double)d2 / (double)d2;
+  //dd3 = 1. / (double)d3 / (double)d3;
 
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
