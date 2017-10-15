@@ -68,7 +68,7 @@ void process_error(const cudaError_t &error, char *string = 0,
 
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
-  //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
+  printf("old source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
 //  printf("source %d, dir_gpu: %f, sources: %08x %08x %08x %08x, index start %d\n", ix, dir_gpu,
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it]),
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 1]),
@@ -92,7 +92,7 @@ extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
        1e6 * sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
        1e6 * sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
        1e6 * sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
-  //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
+  printf("new source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
 }
 
 extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
@@ -1241,6 +1241,7 @@ void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
 
   float coeffs_cpu[COEFFS_SIZE] =
       get_coeffs((float)d1, (float)d2, (float)d3);
+  fprintf(stderr, "coeffs %f %f %f %f\n", coeffs_cpu[0], coeffs_cpu[4], coeffs_cpu[5], coeffs_cpu[6]);
 
   //dd1 = 1. / (double)d1 / (double)d1;
   //dd2 = 1. / (double)d2 / (double)d2;
