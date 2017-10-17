@@ -457,7 +457,7 @@ void cpuProp::prop(float *p0, float *p1, float *vel){
 	int y4 = 4 * _nx;
 	int z1 = _n12;
 	int z2 = 2 * _n12;
-	int z3 = 4 * _n12;
+	int z3 = 3 * _n12;
 	int z4 = 4 * _n12;
 
 	tbb::parallel_for(tbb::blocked_range2d<int>(4, _nz - 4, tile_size, 4, _ny - 4, tile_size),
