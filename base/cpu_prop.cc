@@ -297,7 +297,7 @@ int ic=0;
 }
 
 void cpuProp::imageCondition(float *rec, float *src, float *img) {
-	tbb::parallel_for(tbb::blocked_range<int>(0, _n123, 256),
+	tbb::parallel_for(tbb::blocked_range<int>(0, _n123, 1024),
 			[&](const tbb::blocked_range<int>&r) {
 #pragma omp simd
 				for (int i = r.begin(); i != r.end(); ++i) {
@@ -389,9 +389,9 @@ void cpuProp::injectSource(int id, int ii, float *p){
 void cpuProp::injectReceivers(int id, int ii, float *p){
 	if(id+7 >= _ntRec)  return;
 	float sc=(float)_dir/(float) _jt;
-	tbb::parallel_for(tbb::blocked_range<int>(0,_nRecs),
+	tbb::parallel_for(tbb::blocked_range<int>(0,_nRecs, 8),
 			[&](const tbb::blocked_range<int>&r){
-//#pragma omp simd
+#pragma omp simd
 				for(int i=r.begin(); i!=r.end(); ++i){
 					int index = _ntRec * i + id;
 					p[_locsR[i]]+=sc*(
