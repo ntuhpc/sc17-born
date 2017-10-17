@@ -1,6 +1,7 @@
 #include "rtm_zero_op_3d.h"
 #include "sinc_bob.h"
 //#include "gpu_funcs_3d.h"
+#include <malloc.h>
 #include <math.h>
 #include "deriv_3d.h"
 #include "laplac_3d.h"
@@ -294,7 +295,14 @@ bool rtm_zero_op::adjoint(bool add, std::shared_ptr<my_vector>mvec,
 		//image->add_image(img);
 		image->add_image(img_lap);
 
-
+		//_mm_free(&src_p0->vals[-12]);
+		//_mm_free(&src_p1->vals[-12]);
+		//_mm_free(&vrand->vals[-12]);
+		//_mm_free(&vnone->vals[-12]);
+		//src_p0->vals = 0;
+		//src_p1->vals = 0;
+		//vrand->vals=0;
+		//vnone->vals=0;
 	}
 
 

@@ -3,6 +3,7 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
+#include <malloc.h>
 #include "cpu_prop.h"
 #define C0  0
 #define CZ1 1
@@ -241,10 +242,15 @@ fprintf(stderr,"forward   %d of %d \n",it,nt);
 void cpuProp::rtmAdjoint(int n1, int n2, int n3, int jtd, float *src_p0, float *src_p1,
 	float *img, int npts_s, int nt){
 //    rtm_adjoint(ad1.n,ad2.n,ad3.n,jtd,src_p0->vals,src_p1->vals,img->vals,npts_s,nt/*,src,recx*/);
-	std::vector<float> rec_p0(_n123,0.),rec_p1(_n123,0.);
-	float *r_p0=rec_p0.data(), *r_p1=rec_p1.data();
-	_dir=-1;
+	//std::vector<float> rec_p0(_n123,0.),rec_p1(_n123,0.);
+	float *temp0=(float*)_mm_malloc((16+_n123)*sizeof(float), 64);
+	float *temp1=(float*)_mm_malloc((32+_n123)*sizeof(float), 64);
+	memset(temp0, 0., (16+_n123)*sizeof(float));
+	memset(temp1, 0., (32+_n123)*sizeof(float));
+	float *r_p0 = temp0 + 12;
+	float *r_p1 = temp1 + 16 + 12;
 
+	_dir=-1;
 		   float sm1=0,sm2=0;
 		   for(int i=0; i < n1*n2*n3; i++){
 		     sm1=sm1+fabsf(src_p0[i]);
@@ -286,6 +292,8 @@ int ic=0;
 
 	}
 
+	_mm_free(temp0);
+	_mm_free(temp1);
 }
 
 void cpuProp::imageCondition(float *rec, float *src, float *img) {
@@ -438,6 +446,9 @@ void cpuProp::imageAdd(float *img,  float *recField, float *srcField){
  * the array is structured as (Z, Y, X)
  */
 void cpuProp::prop(float *p0, float *p1, float *vel){
+	__assume_aligned(p0, 64);
+	__assume_aligned(p1, 64);
+	__assume_aligned(vel, 64);
 #ifdef __COB // cache obvilious
 	p0_global = p0;
 	p1_global = p1;

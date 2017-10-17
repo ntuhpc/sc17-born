@@ -1,4 +1,5 @@
 #include <vel_fd_3d.h>
+#include <hypercube_float.h>
 #include <data_rtm_3d.h>
 #include <image_rtm_3d.h>
 #include <ioModes.h>

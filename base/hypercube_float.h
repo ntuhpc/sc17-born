@@ -1,5 +1,7 @@
 #ifndef HYPERCUBE_FLOAT_H
 #define HYPERCUBE_FLOAT_H 1
+#include <cstdio>
+#include <malloc.h>
 #include <axis.h>
 #include <hypercube.h>
 #include <my_vector.h>
@@ -7,6 +9,8 @@
 class hypercube_float : public SEP::hypercube, public my_vector {
 
 public:
+
+static int offset;
 hypercube_float()
 {
 	this->vals=0;
@@ -51,7 +55,8 @@ void init_ndf(std::vector<SEP::axis> ax){
 
 
 void deallocate(){
-	if(this->vals!=0) delete []this->vals;
+	if(this->aligned) _mm_free(this->temp);
+	else if(this->vals!=0) delete []this->vals;
 }
 virtual ~hypercube_float(){
 	this->deallocate();
@@ -61,8 +66,9 @@ virtual bool check_match(const std::shared_ptr<my_vector> v2);
 
 void info(char *str,int level=0);
 float *vals;
+float *temp;
 
-
+bool aligned = false;
 
 private:
 };

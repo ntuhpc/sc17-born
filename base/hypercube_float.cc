@@ -1,13 +1,21 @@
 #include <hypercube_float.h>
+#include <malloc.h>
 #include <math.h>
 #include <cstdlib>
 #include <string.h>
 #define MIN(a,b) ( ((a)<(b)) ? (a) : (b) )
 
+int hypercube_float::offset = 0;
+
 hypercube_float::hypercube_float(std::vector<SEP::axis> axes,bool alloc){
 	this->initNd(axes);
 	if(alloc) {
-		this->vals=new float[this->getN123()];
+		size_t bytes = (this->offset + 16 + this->getN123()) * sizeof(float);
+		this->temp = (float*)_mm_malloc(bytes, 64);
+		memset(this->temp, 0., bytes);
+		this->vals=temp+this->offset+12; // offset
+		this->aligned = true;
+		this->offset += 16;
 	}
 	else this->vals=0;
 	name="hypercube_float";
