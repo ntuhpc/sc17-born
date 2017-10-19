@@ -36,6 +36,7 @@
   }
 
 __constant__ float coeffs[COEFFS_SIZE];
+__constant__ float bound[40];
 
 extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
                                        float *vel, const int start3,
@@ -151,30 +152,30 @@ extern "C" __global__ void wave_kernel(float *p0, float *p1, float *p2,
 
 	float vel_cur = vel[out_idx];
     float div = vel_cur * coeffs[C0] * current +
-                vel_cur * coeffs[CX1] * (p1s[ty][tx - 1] + p1s[ty][tx + 1]) +
-                vel_cur * coeffs[CX2] * (p1s[ty][tx - 2] + p1s[ty][tx + 2]) +
-                vel_cur * coeffs[CX3] * (p1s[ty][tx - 3] + p1s[ty][tx + 3]) +
-                vel_cur * coeffs[CX4] * (p1s[ty][tx - 4] + p1s[ty][tx + 4]) +
-                vel_cur * coeffs[CY1] * (p1s[ty - 1][tx] + p1s[ty + 1][tx]) +
-                vel_cur * coeffs[CY2] * (p1s[ty - 2][tx] + p1s[ty + 2][tx]) +
-                vel_cur * coeffs[CY3] * (p1s[ty - 3][tx] + p1s[ty + 3][tx]) +
-                vel_cur * coeffs[CY4] * (p1s[ty - 4][tx] + p1s[ty + 4][tx]) +
-                vel_cur * coeffs[CZ1] * (infront1 + behind1) +
-                vel_cur * coeffs[CZ2] * (infront2 + behind2) +
-                vel_cur * coeffs[CZ3] * (infront3 + behind3) +
-                vel_cur * coeffs[CZ4] * (infront4 + behind4);
-                //vel_cur * coeffs[CX1] * p1s[ty][tx - 1] + vel_cur * coeffs[CX1] * p1s[ty][tx + 1] +
-                //vel_cur * coeffs[CX2] * p1s[ty][tx - 2] + vel_cur * coeffs[CX2] * p1s[ty][tx + 2] +
-                //vel_cur * coeffs[CX3] * p1s[ty][tx - 3] + vel_cur * coeffs[CX3] * p1s[ty][tx + 3] +
-                //vel_cur * coeffs[CX4] * p1s[ty][tx - 4] + vel_cur * coeffs[CX4] * p1s[ty][tx + 4] +
-                //vel_cur * coeffs[CY1] * p1s[ty - 1][tx] + vel_cur * coeffs[CY1] * p1s[ty + 1][tx] +
-                //vel_cur * coeffs[CY2] * p1s[ty - 2][tx] + vel_cur * coeffs[CY2] * p1s[ty + 2][tx] +
-                //vel_cur * coeffs[CY3] * p1s[ty - 3][tx] + vel_cur * coeffs[CY3] * p1s[ty + 3][tx] +
-                //vel_cur * coeffs[CY4] * p1s[ty - 4][tx] + vel_cur * coeffs[CY4] * p1s[ty + 4][tx] +
-                //vel_cur * coeffs[CZ1] * infront1 + vel_cur * coeffs[CZ1] * behind1 +
-                //vel_cur * coeffs[CZ2] * infront2 + vel_cur * coeffs[CZ2] * behind2 +
-                //vel_cur * coeffs[CZ3] * infront3 + vel_cur * coeffs[CZ3] * behind3 +
-                //vel_cur * coeffs[CZ4] * infront4 + vel_cur * coeffs[CZ4] * behind4;
+                //vel_cur * coeffs[CX1] * (p1s[ty][tx - 1] + p1s[ty][tx + 1]) +
+                //vel_cur * coeffs[CX2] * (p1s[ty][tx - 2] + p1s[ty][tx + 2]) +
+                //vel_cur * coeffs[CX3] * (p1s[ty][tx - 3] + p1s[ty][tx + 3]) +
+                //vel_cur * coeffs[CX4] * (p1s[ty][tx - 4] + p1s[ty][tx + 4]) +
+                //vel_cur * coeffs[CY1] * (p1s[ty - 1][tx] + p1s[ty + 1][tx]) +
+                //vel_cur * coeffs[CY2] * (p1s[ty - 2][tx] + p1s[ty + 2][tx]) +
+                //vel_cur * coeffs[CY3] * (p1s[ty - 3][tx] + p1s[ty + 3][tx]) +
+                //vel_cur * coeffs[CY4] * (p1s[ty - 4][tx] + p1s[ty + 4][tx]) +
+                //vel_cur * coeffs[CZ1] * (infront1 + behind1) +
+                //vel_cur * coeffs[CZ2] * (infront2 + behind2) +
+                //vel_cur * coeffs[CZ3] * (infront3 + behind3) +
+                //vel_cur * coeffs[CZ4] * (infront4 + behind4);
+                vel_cur * coeffs[CX1] * p1s[ty][tx - 1] + vel_cur * coeffs[CX1] * p1s[ty][tx + 1] +
+                vel_cur * coeffs[CX2] * p1s[ty][tx - 2] + vel_cur * coeffs[CX2] * p1s[ty][tx + 2] +
+                vel_cur * coeffs[CX3] * p1s[ty][tx - 3] + vel_cur * coeffs[CX3] * p1s[ty][tx + 3] +
+                vel_cur * coeffs[CX4] * p1s[ty][tx - 4] + vel_cur * coeffs[CX4] * p1s[ty][tx + 4] +
+                vel_cur * coeffs[CY1] * p1s[ty - 1][tx] + vel_cur * coeffs[CY1] * p1s[ty + 1][tx] +
+                vel_cur * coeffs[CY2] * p1s[ty - 2][tx] + vel_cur * coeffs[CY2] * p1s[ty + 2][tx] +
+                vel_cur * coeffs[CY3] * p1s[ty - 3][tx] + vel_cur * coeffs[CY3] * p1s[ty + 3][tx] +
+                vel_cur * coeffs[CY4] * p1s[ty - 4][tx] + vel_cur * coeffs[CY4] * p1s[ty + 4][tx] +
+                vel_cur * coeffs[CZ1] * infront1 + vel_cur * coeffs[CZ1] * behind1 +
+                vel_cur * coeffs[CZ2] * infront2 + vel_cur * coeffs[CZ2] * behind2 +
+                vel_cur * coeffs[CZ3] * infront3 + vel_cur * coeffs[CZ3] * behind3 +
+                vel_cur * coeffs[CZ4] * infront4 + vel_cur * coeffs[CZ4] * behind4;
     //p0[out_idx] = vel[out_idx] * div + current * 2.0f - p0[out_idx];
     p0[out_idx] = div + current * 2.0f - p0[out_idx];
   }
@@ -321,10 +322,9 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
       edge = min2(ig, min2(min2(n2gpu - 2 * radius - jg, n1gpu - 2 * radius - ig),
                                  jg));  // Don't damp top or bottom
     if (edge >= 0 && edge < 40) {
-      float temp = expf(-bc_bgpu * (bc_agpu - edge));
       //if (temp < 1.) {
-        p1[addr] *= temp;
-        p0[addr] *= temp;
+        p1[addr] *= bound[edge];
+        p0[addr] *= bound[edge];
       //}
     }
 	addr += stride;

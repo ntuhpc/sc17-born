@@ -1,10 +1,12 @@
 //#include "cutil_inline.h"
 //#include "cutil_math.h"
+#include <vector>
 #include <stdlib.h>
 #include "gpu_finite_3d.h"
 //#include "sep3d.h"
 //#include "seplib.h"
 #include "cudaErrors.cu"
+#include "extra.h"
 int ntblock_internal;
 #include "assert.h"
 #include "wave_fkernel.3d8o.cu"
@@ -1232,6 +1234,7 @@ void transfer_vel_func2(int n1, int n2, int n3, float *vel) {
                n1 * n2 * n3 * sizeof(float), cudaMemcpyHostToDevice);
   }
 }
+
 void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
                       float bc_b_y, int n1, int n2, int n3) {
   lead_pad = 0;  // 32-radius;
@@ -1243,9 +1246,7 @@ void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
       get_coeffs((float)d1, (float)d2, (float)d3);
   fprintf(stderr, "coeffs %f %f %f %f\n", coeffs_cpu[0], coeffs_cpu[4], coeffs_cpu[5], coeffs_cpu[6]);
 
-  //dd1 = 1. / (double)d1 / (double)d1;
-  //dd2 = 1. / (double)d2 / (double)d2;
-  //dd3 = 1. / (double)d3 / (double)d3;
+  std::vector<float> bound_cpu = compute_bound();
 
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
@@ -1261,6 +1262,8 @@ void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
     cudaMemcpyToSymbol(bc_agpu, &bc_a, sizeof(float));
     cudaMemcpyToSymbol(bc_bgpu, &bc_b, sizeof(float));
     cudaMemcpyToSymbol(coeffs, coeffs_cpu, COEFFS_SIZE * sizeof(float), 0,
+                       cudaMemcpyHostToDevice);
+    cudaMemcpyToSymbol(bound, bound_cpu.data(), 40 * sizeof(float), 0,
                        cudaMemcpyHostToDevice);
   }
 }
