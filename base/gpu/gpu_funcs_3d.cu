@@ -1055,7 +1055,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
         cudaSetDevice(device[i]);
 		dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
         img_kernel<<<dimGridImg, dimBlock, 0, stream_internal[i]>>>(
-            img_gpu[i] + lead_pad, data_p0[i] + lead_pad, src_p0[i] + lead_pad);
+            img_gpu[i], data_p0[i] + lead_pad, src_p0[i] + lead_pad);
       }
 
     for (int i = 0; i < n_gpus; i++) {
