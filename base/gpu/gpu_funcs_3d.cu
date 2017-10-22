@@ -845,9 +845,9 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
     cudaMemset(data_p1[i], 0, (n1 * n2 * n3 + lead_pad) * sizeof(float));
     cudaMemset(img_gpu[i], 0, (n1 * n2 * n3) * sizeof(float));
     cudaMemset(src_p0[i], 0,
-               (n1 * n2 * n3) * sizeof(float));
+               (n1 * n2 * n3 + lead_pad) * sizeof(float));
     cudaMemset(src_p1[i], 0,
-               (n1 * n2 * n3) * sizeof(float));
+               (n1 * n2 * n3 + lead_pad) * sizeof(float));
     //cudaMemset(src_p0[i], 0,
     //           (n1 * n2 * n3 + radius * n1 * n2 + lead_pad) * sizeof(float));
     //cudaMemset(src_p1[i], 0,
@@ -1221,7 +1221,7 @@ void transfer_vel_func1(int n1, int n2, int n3, float *vel) {
   n3 = (n3 - 2 * radius) / n_gpus + 2 * radius;
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
-    cudaMemcpy(velocity[i] /*+lead_pad*/, vel + i * n1 * n2 * (n3 - 2 * radius),
+    cudaMemcpy(velocity[i] +lead_pad, vel + i * n1 * n2 * (n3 - 2 * radius),
                n1 * n2 * n3 * sizeof(float), cudaMemcpyHostToDevice);
   }
 }
@@ -1229,7 +1229,7 @@ void transfer_vel_func2(int n1, int n2, int n3, float *vel) {
   n3 = (n3 - 2 * radius) / n_gpus + 2 * radius;
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
-    cudaMemcpy(velocity2[i] /*+lead_pad*/,
+    cudaMemcpy(velocity2[i] +lead_pad,
                vel + i * n1 * n2 * (n3 - 2 * radius),
                n1 * n2 * n3 * sizeof(float), cudaMemcpyHostToDevice);
   }
@@ -1237,8 +1237,8 @@ void transfer_vel_func2(int n1, int n2, int n3, float *vel) {
 
 void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
                       float bc_b_y, int n1, int n2, int n3) {
-  lead_pad = 0;  // 32-radius;
-  //lead_pad = 32-radius;
+  //lead_pad = 0;  // 32-radius;
+  lead_pad = 32-radius;
   n3 = (n3 - 2 * radius) / n_gpus + 2 * radius;
   offset = radius * n1 * n2 + radius * n1 + radius + lead_pad;
 
@@ -1251,9 +1251,9 @@ void create_gpu_space(float d1, float d2, float d3, float bc_a, float bc_b,
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
     cudaMalloc((void **)&velocity[i],
-               (n1 * n2 * n3 /*+lead_pad*/) * sizeof(float));
+               (n1 * n2 * n3 +lead_pad) * sizeof(float));
     cudaMalloc((void **)&velocity2[i],
-               (n1 * n2 * n3 /*+lead_pad*/) * sizeof(float));
+               (n1 * n2 * n3 +lead_pad) * sizeof(float));
     fprintf(stderr, "CHECK N1GPU %d \n", n1);
     cudaMemcpyToSymbol(n1gpu, &n1, sizeof(int));
     cudaMemcpyToSymbol(n2gpu, &n2, sizeof(int));
