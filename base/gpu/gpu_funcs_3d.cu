@@ -262,13 +262,13 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
     offset_internal[i] = offset;
     if (i > 0) offset_internal[i] += n1 * n2 * radius;
 
-    start3[i] = i * (n3 - 2 * radius) + 2 * radius; // this is correct
-    end3[i] = (i + 1) * (n3 - 2 * radius); // this is correct
+    start3[i] = i * (n3 - 2 * radius) + 2 * radius + lead_pad; // this is correct
+    end3[i] = (i + 1) * (n3 - 2 * radius) + lead_pad; // this is correct
   }
 
-  start3[0] = radius;
+  start3[0] = radius + lead_pad;
   // TODO: check this
-  end3[n_gpus - 1] = n_gpus * (n3 - 2 * radius) + radius;
+  end3[n_gpus - 1] = n_gpus * (n3 - 2 * radius) + radius + lead_pad;
       //n_gpus * (n3 - 2 * radius);  // I THINK THIS SHOULD BE -RADIUS. LET'S TRY
       //n_gpus * (n3 - radius);  // I THINK THIS SHOULD BE -RADIUS. LET'S TRY
   // start3[0]=0;
@@ -902,12 +902,12 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
     offset_internal[i] = offset;
     if (i > 0) offset_internal[i] += n1 * n2 * radius;
 
-    start3[i] = i * (n3 - 2 * radius) + 2 * radius;
-    end3[i] = (i + 1) * (n3 - 2 * radius);
+    start3[i] = i * (n3 - 2 * radius) + 2 * radius + lead_pad;
+    end3[i] = (i + 1) * (n3 - 2 * radius) + lead_pad;
   }
 
-  start3[0] = radius;
-  end3[n_gpus - 1] = n_gpus * (n3 - 2 * radius) + radius;
+  start3[0] = radius + lead_pad;
+  end3[n_gpus - 1] = n_gpus * (n3 - 2 * radius) + radius + lead_pad;
 
   int offset_snd_h1 = lead_pad + n1 * n2 * radius;
   int offset_snd_h2 = lead_pad + n1 * n2 * (n3 - 2 * radius);
