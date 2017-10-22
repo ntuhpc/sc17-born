@@ -911,7 +911,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 
   int offset_snd_h1 = lead_pad + n1 * n2 * radius;
   int offset_snd_h2 = lead_pad + n1 * n2 * (n3 - 2 * radius);
-  int offset_rcv_h1 = 0;
+  int offset_rcv_h1 = lead_pad;
   int offset_rcv_h2 = lead_pad + n1 * n2 * (n3 - radius);
   int offset_cmp_h1 = offset_snd_h1 + n1 * radius + radius;
   int offset_cmp_h2 = offset_snd_h2 + n1 * radius + radius;
