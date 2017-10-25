@@ -928,6 +928,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   int data_counter = 0;
   int src_counter = 0;
   for (int it = nt - 1; it >= 0; it--) {
+fprintf(stderr,"running adjoint %d\n",it);
     id_s = (it + 1) / _jtsS;
     i_s = it + 1 - id_s * _jtsS;
     int id = it / _jtdD;
@@ -1027,7 +1028,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 			if (id_s + 7 < ntsource_internal) {
               new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
                   id_s, i_s, src_p1[i] + lead_pad);
-			  fprintf(stderr, "id_s: %d, ntsource_internal: %d\n", id_s, ntsource_internal);
+			  //fprintf(stderr, "id_s: %d, ntsource_internal: %d\n", id_s, ntsource_internal);
 			  src_counter++;
 			}
         }
@@ -1083,7 +1084,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
     }
   }
 
-  fprintf(stderr, "Number of source injects: %d, number of data injects: %d", src_counter, data_counter);
+  fprintf(stderr, "Number of source injects: %d, number of data injects: %d\n", src_counter, data_counter);
 
   error = cudaGetLastError();
   process_error(error, "kernel");
