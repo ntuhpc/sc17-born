@@ -335,19 +335,7 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
           start3[i], end3[i], last_x_block, last_y_block);
   error = cudaGetLastError();
   process_error(error, "wave_kernel\n");
-      if (i == shot_gpu) // TODO: should this shot_gpu change?
-        if (id + 7 < ntsource_internal)
-		{
-          //fprintf(stderr, "src inject kernel with %d sources\n", npts_internal);
-          new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
-              id, ii, src_p0[i] + lead_pad);
-		  src_counter++;
-  error = cudaGetLastError();
-  process_error(error, "src_inject\n");
-		}
     }
-	//if (it > 0)
-		//break;
 
     // Overlap internal computation with halo communication
     // Send halos to the 'right'
@@ -368,6 +356,20 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
       cudaMemcpyPeerAsync(src_p0[i - 1] + offset_rcv_h2, i - 1,
                           src_p0[i] + offset_snd_h1, i,
                           n1 * n2 * radius * sizeof(float), stream_halo[i]);
+    }
+
+    for (int i = 0; i < n_gpus; i++) {
+       cudaSetDevice(i);
+       cudaStreamSynchronize(stream_halo[i]);
+      if (i == shot_gpu) // TODO: should this shot_gpu change?
+        if (id + 7 < ntsource_internal)
+		{
+          new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
+              id, ii, src_p0[i] + lead_pad);
+		  src_counter++;
+  error = cudaGetLastError();
+  process_error(error, "src_inject\n");
+		}
     }
 
     // Synchronise GPUs and do pointer exchange
@@ -990,14 +992,6 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
             src_p0[i] + offset_internal[i], src_p1[i] + offset_internal[i],
             src_p0[i] + offset_internal[i], velocity[i] + offset_internal[i],
             start3[i], end3[i], last_x_block, last_y_block);
-        if (i == shot_gpu) {
-			if (id_s + 7 < ntsource_internal) {
-              new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
-                  id_s, i_s, src_p1[i] + lead_pad);
-			  fprintf(stderr, "id_s: %d, ntsource_internal: %d\n", id_s, ntsource_internal);
-			  src_counter++;
-			}
-        }
       }
     }
 
@@ -1011,7 +1005,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
                             src_p0[i] + offset_snd_h1, i,
                             n1 * n2 * radius * sizeof(float), stream_halo[i]);
     }
-    for (int i = 0; i < n_gpus - 1; i++) {
+    for (int i = 1; i < n_gpus; i++) {
       cudaSetDevice(i);
       cudaStreamSynchronize(stream_halo[i]);
     }
@@ -1024,6 +1018,19 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
         cudaMemcpyPeerAsync(src_p0[i + 1] + offset_rcv_h1, i + 1,
                             src_p0[i] + offset_snd_h2, i,
                             n1 * n2 * radius * sizeof(float), stream_halo[i]);
+    }
+
+    for (int i = 0; i < n_gpus; i++) {
+        cudaSetDevice(i);
+        cudaStreamSynchronize(stream_halo[i]);
+        if (i == shot_gpu) {
+			if (id_s + 7 < ntsource_internal) {
+              new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
+                  id_s, i_s, src_p1[i] + lead_pad);
+			  fprintf(stderr, "id_s: %d, ntsource_internal: %d\n", id_s, ntsource_internal);
+			  src_counter++;
+			}
+        }
     }
 
 	// damp after peer access
