@@ -1,4 +1,3 @@
-#!bin/bash
+#!/bin/bash
 
-module load GCC CUDA CMake
-source /opt/intel2018/compilers_and_libraries/linux/bin/compilervars.sh intel64
+export PATH=/home/public/born/gpu-ver/build:/home/public/born/gpu-ver/build/util:$PATH
