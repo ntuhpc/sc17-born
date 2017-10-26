@@ -48,7 +48,7 @@ std::shared_ptr<hypercube_float> vel_fd_3d::rand_subspace(
   fprintf(stderr, "the size %d %d %d \n", av_1.n, av_2.n, av_3.n);
 
   tbb::parallel_for(
-      tbb::blocked_range<int>(0, axes[2].n),
+      tbb::blocked_range<int>(0, axes[2].n, axes[2].n),
       [&](const tbb::blocked_range<int> &r) {
         for (int iz = r.begin(); iz != r.end(); ++iz) {
           float dy2, dx2, dz2, rnd;

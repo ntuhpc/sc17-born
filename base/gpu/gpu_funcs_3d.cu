@@ -70,7 +70,7 @@ void process_error(const cudaError_t &error, char *string = 0,
 
 extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
-  //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
+  //printf("old source data: %f\n", p[srcgeom_gpu0[ix]]);
 //  printf("source %d, dir_gpu: %f, sources: %08x %08x %08x %08x, index start %d\n", ix, dir_gpu,
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it]),
 //		  *((uint32_t*)&source_gpu0[ntrace_gpu * ix + it + 1]),
@@ -94,14 +94,16 @@ extern "C" __global__ void new_src_inject_kernel(int it, int isinc, float *p) {
        sinc_s_table[isinc * nsinc_gpu + 5] * source_gpu0[ntrace_gpu * ix + it + 5] +
        sinc_s_table[isinc * nsinc_gpu + 6] * source_gpu0[ntrace_gpu * ix + it + 6] +
        sinc_s_table[isinc * nsinc_gpu + 7] * source_gpu0[ntrace_gpu * ix + it + 7]);
-  //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]*1e-6);
+  //printf("new source data: %f\n", p[srcgeom_gpu0[ix]]);
 }
 
-extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
+extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p, int grid_x_width) {
   int j = blockIdx.y * blockDim.y + threadIdx.y;
   int k = blockIdx.x * blockDim.x + threadIdx.x;
-  int i = k + n1gpu * j;
+  int i = k + grid_x_width * j;
   if (i < rec_nx_gpu * rec_ny_gpu) {
+    if (i == 0)
+      printf("old receiver data: %f\n", p[datageom_gpu0[0]]);
     p[datageom_gpu0[i]] += dir_gpu *
 		(sinc_d_table[isinc * nsinc_gpu] * data_gpu0[ntrace_gpu * i + it] +
          sinc_d_table[isinc * nsinc_gpu + 1] * data_gpu0[ntrace_gpu * i + it + 1] +
@@ -111,6 +113,8 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p) {
          sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
          sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
          sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
+    if (i == 0)
+      printf("new receiver data: %f\n", p[datageom_gpu0[0]]);
   }
 }
 
@@ -362,6 +366,7 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
        cudaSetDevice(i);
        cudaStreamSynchronize(stream_halo[i]);
       if (i == shot_gpu) // TODO: should this shot_gpu change?
+      {
         if (id + 7 < ntsource_internal)
 		{
           new_src_inject_kernel<<<1, npts_internal, 0, stream_internal[i]>>>(
@@ -370,6 +375,7 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
   error = cudaGetLastError();
   process_error(error, "src_inject\n");
 		}
+        }
     }
 
     // Synchronise GPUs and do pointer exchange
@@ -1057,11 +1063,12 @@ fprintf(stderr,"running adjoint %d\n",it);
 		}
 	}
     cudaSetDevice(device[0]);
+	int rec_x_width = ((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE) * BLOCKX_SIZE;
 	dim3 dimGridDataInject((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
 			(rec_ny + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
 	if (id + 7 < ntreceiver_internal) {
       new_data_inject_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[0]>>>(
-          id, ii, data_p0[0] + lead_pad/*+offset_snd_h1*/);
+          id, ii, data_p0[0] + lead_pad/*+offset_snd_h1*/, rec_x_width);
 	  data_counter++;
 	}
 
@@ -1235,7 +1242,8 @@ void transfer_vel_func1(int n1, int n2, int n3, float *vel) {
   n3 = (n3 - 2 * radius) / n_gpus + 2 * radius;
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
-    cudaMemcpy(velocity[i] +lead_pad, vel + i * n1 * n2 * (n3 - 2 * radius),
+    cudaMemcpy(velocity[i] +lead_pad,
+	       vel + i * n1 * n2 * (n3 - 2 * radius),
                n1 * n2 * n3 * sizeof(float), cudaMemcpyHostToDevice);
   }
 }

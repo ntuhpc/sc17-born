@@ -297,10 +297,7 @@ extern "C" __global__ void damp_kernel(float *p0, float *p1, const int start3,
 
   int stride = n1gpu * n2gpu;  // Number of elements between wavefield slices
   int addr = ig + n1gpu * jg;
-  int edge = 0;
-  // TODO: check
-  int bc_agpu=40;
-  float bc_bgpu=0.0005;
+  int edge = -1;
 
   // damp halo + internal region
   for (int zg = start3; zg < end3; zg++) {

@@ -2,7 +2,7 @@
 #include <cstdio>
 #include "base/gpu/wave_fkernel.3d8o.cu"
 
-#define SIZE 24
+#define SIZE 36
 #define RADIUS 4
 
 float coeffs_cpu[13] = get_coeffs(SIZE, SIZE, SIZE);
@@ -60,9 +60,9 @@ int main()
 
 	// run GPU kernel
 	dim3 block(16, 16);
-	dim3 grid(1, 1);
+	dim3 grid(2, 2);
 	int offset = SIZE * SIZE * RADIUS + SIZE * RADIUS + RADIUS;
-	wave_kernel<<<grid, block>>>(gpu_p0+offset, test_array_gpu+offset, gpu_p0+offset, vel_gpu+offset, 0, 16, 0, 0);
+	wave_kernel<<<grid, block>>>(gpu_p0+offset, test_array_gpu+offset, gpu_p0+offset, vel_gpu+offset, 0, 28, 1, 1);
 	cudaError_t err = cudaGetLastError();
 	if (err != cudaSuccess)
 		printf("%s\n", cudaGetErrorString(err));
@@ -72,13 +72,13 @@ int main()
 	printf("current: %f\n", ref_array_cpu[offset]);
 	printf("x neg: %f %f %f %f\n", ref_array_cpu[offset-1], ref_array_cpu[offset-2], ref_array_cpu[offset-3], ref_array_cpu[offset-4]);
 	printf("x pos: %f %f %f %f\n", ref_array_cpu[offset+1], ref_array_cpu[offset+2], ref_array_cpu[offset+3], ref_array_cpu[offset+4]);
-	printf("y neg: %f %f %f %f\n", ref_array_cpu[offset-1*24], ref_array_cpu[offset-2*24], ref_array_cpu[offset-3*24], ref_array_cpu[offset-4*24]);
-	printf("y pos: %f %f %f %f\n", ref_array_cpu[offset+1*24], ref_array_cpu[offset+2*24], ref_array_cpu[offset+3*24], ref_array_cpu[offset+4*24]);
+	printf("y neg: %f %f %f %f\n", ref_array_cpu[offset-1*SIZE], ref_array_cpu[offset-2*SIZE], ref_array_cpu[offset-3*SIZE], ref_array_cpu[offset-4*SIZE]);
+	printf("y pos: %f %f %f %f\n", ref_array_cpu[offset+1*SIZE], ref_array_cpu[offset+2*SIZE], ref_array_cpu[offset+3*SIZE], ref_array_cpu[offset+4*SIZE]);
 	//printf("z: %f %f %f %f %f %f %f %f\n");
 	prop(cpu_result, ref_array_cpu, vel_cpu);
 
 	// compare
-	for (int i = 0; i < 16 * 16 * 16; ++i)
+	for (int i = 0; i < 28 * 28 * 28; ++i)
 	{
 		if (cpu_result[offset+i] - gpu_result[offset+i] > 1e-6)
 		{
