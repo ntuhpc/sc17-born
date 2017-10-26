@@ -2,5 +2,6 @@
 "data": "data.json",
 "image": "image.json",
 "velocity": "vel.json",
-"wavelet": "wavelet.json"
+"wavelet": "wavelet.json",
+"n_gpus": 2
 }
