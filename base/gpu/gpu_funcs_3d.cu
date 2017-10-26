@@ -102,19 +102,19 @@ extern "C" __global__ void new_data_inject_kernel(int it, int isinc, float *p, i
   int k = blockIdx.x * blockDim.x + threadIdx.x;
   int i = k + grid_x_width * j;
   if (i < rec_nx_gpu * rec_ny_gpu) {
-    if (i == 0)
-      printf("old receiver data: %f\n", p[datageom_gpu0[i]]);
+    //if (i == 0)
+    //  printf("old receiver data: %f\n", p[datageom_gpu0[i]]);
     p[datageom_gpu0[i]] += dir_gpu *
-		(1e6 * sinc_d_table[isinc * nsinc_gpu] * data_gpu0[ntrace_gpu * i + it] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 1] * data_gpu0[ntrace_gpu * i + it + 1] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 2] * data_gpu0[ntrace_gpu * i + it + 2] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 3] * data_gpu0[ntrace_gpu * i + it + 3] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 4] * data_gpu0[ntrace_gpu * i + it + 4] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
-         1e6 * sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
-    if (i == 0)
-      printf("new receiver data: %f\n", p[datageom_gpu0[i]]);
+		(sinc_d_table[isinc * nsinc_gpu] * data_gpu0[ntrace_gpu * i + it] +
+         sinc_d_table[isinc * nsinc_gpu + 1] * data_gpu0[ntrace_gpu * i + it + 1] +
+         sinc_d_table[isinc * nsinc_gpu + 2] * data_gpu0[ntrace_gpu * i + it + 2] +
+         sinc_d_table[isinc * nsinc_gpu + 3] * data_gpu0[ntrace_gpu * i + it + 3] +
+         sinc_d_table[isinc * nsinc_gpu + 4] * data_gpu0[ntrace_gpu * i + it + 4] +
+         sinc_d_table[isinc * nsinc_gpu + 5] * data_gpu0[ntrace_gpu * i + it + 5] +
+         sinc_d_table[isinc * nsinc_gpu + 6] * data_gpu0[ntrace_gpu * i + it + 6] +
+         sinc_d_table[isinc * nsinc_gpu + 7] * data_gpu0[ntrace_gpu * i + it + 7]);
+    //if (i == 0)
+    //  printf("new receiver data: %f\n", p[datageom_gpu0[i]]);
   }
 }
 
@@ -177,7 +177,7 @@ extern "C" __global__ void img_kernel(float *img, float *dat, float *src) {
   int addr = ig + n1gpu * jg;
   int stride = n1gpu * n2gpu;
   for (int iy = 0; iy < n3gpu; iy++) {
-    img[addr] += 1e-6 * dat[addr] * src[addr];
+    img[addr] += dat[addr] * src[addr];
     // printf("%d %d %d\n", img[addr], dat[addr], src[addr]);
     //img[addr] += dat[addr] * src[addr];
     addr += stride;
