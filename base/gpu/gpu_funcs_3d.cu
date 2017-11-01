@@ -892,7 +892,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   dim3 dimBlock(BLOCKX_SIZE, BLOCKY_SIZE);
   dim3 dimGrid(nblocks1, nblocks2);
 
-  cudaStream_t stream_halo[n_gpus], stream_internal[n_gpus];
+  cudaStream_t stream_halo[n_gpus], stream_halo_data[n_gpus], stream_internal[n_gpus], stream_internal_data[n_gpus];
   cudaEvent_t start, stop;
 
   cudaSetDevice(device[0]);
@@ -905,7 +905,9 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
     cudaStreamCreate(&stream_halo[i]);
+    cudaStreamCreate(&stream_halo_data[i]);
     cudaStreamCreate(&stream_internal[i]);
+	cudaStreamCreate(&stream_internal_data[i]);
 
     offset_internal[i] = offset;
     if (i > 0) offset_internal[i] += n1 * n2 * radius;
@@ -946,7 +948,7 @@ fprintf(stderr,"running adjoint %d\n",it);
       cudaSetDevice(i);
       if (i > 0) {
 	    if (it > 0)
-          wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
+          wave_kernel<<<dimGrid, dimBlock, 0, stream_halo_data[i]>>>(
               data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1,
               data_p0[i] + offset_cmp_h1, velocity2[i] + offset_cmp_h1, radius,
               radius * 2, last_x_block, last_y_block);
@@ -960,7 +962,7 @@ fprintf(stderr,"running adjoint %d\n",it);
       if (i < n_gpus - 1) {
         // TODO: validate
 		if (it > 0)
-          wave_kernel<<<dimGrid, dimBlock, 0, stream_halo[i]>>>(
+          wave_kernel<<<dimGrid, dimBlock, 0, stream_halo_data[i]>>>(
               data_p0[i] + offset_cmp_h2, data_p1[i] + offset_cmp_h2,
               data_p0[i] + offset_cmp_h2, velocity2[i] + offset_cmp_h2,
               radius, radius * 2, last_x_block, last_y_block);
@@ -988,7 +990,7 @@ fprintf(stderr,"running adjoint %d\n",it);
     for (int i = 0; i < n_gpus; i++) {
       cudaSetDevice(i);
       if (it > 0) {
-        wave_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+        wave_kernel<<<dimGrid, dimBlock, 0, stream_internal_data[i]>>>(
             data_p0[i] + offset_internal[i], data_p1[i] + offset_internal[i],
             data_p0[i] + offset_internal[i], velocity2[i] + offset_internal[i],
             start3[i], end3[i], last_x_block, last_y_block);
@@ -1006,7 +1008,7 @@ fprintf(stderr,"running adjoint %d\n",it);
 	  if (it > 0)
       cudaMemcpyPeerAsync(data_p0[i - 1] + offset_rcv_h2, i - 1,
                           data_p0[i] + offset_snd_h1, i,
-                          n1 * n2 * radius * sizeof(float), stream_halo[i]);
+                          n1 * n2 * radius * sizeof(float), stream_halo_data[i]);
       if (it < nt - 1)
         cudaMemcpyPeerAsync(src_p0[i - 1] + offset_rcv_h2, i - 1,
                             src_p0[i] + offset_snd_h1, i,
@@ -1015,12 +1017,13 @@ fprintf(stderr,"running adjoint %d\n",it);
     for (int i = 1; i < n_gpus; i++) {
       cudaSetDevice(i);
       cudaStreamSynchronize(stream_halo[i]);
+	  cudaStreamSynchronize(stream_halo_data[i]);
     }
     for (int i = 0; i < n_gpus - 1; i++) {
 	  if (it > 0)
       cudaMemcpyPeerAsync(data_p0[i + 1] + offset_rcv_h1, i + 1,
                           data_p0[i] + offset_snd_h2, i,
-                          n1 * n2 * radius * sizeof(float), stream_halo[i]);
+                          n1 * n2 * radius * sizeof(float), stream_halo_data[i]);
       if (it < nt - 1)
         cudaMemcpyPeerAsync(src_p0[i + 1] + offset_rcv_h1, i + 1,
                             src_p0[i] + offset_snd_h2, i,
@@ -1041,26 +1044,30 @@ fprintf(stderr,"running adjoint %d\n",it);
         }
 	}
     }
+    for (int i = 0; i < n_gpus; i++) {
+      cudaSetDevice(i);
+	  cudaStreamSynchronize(stream_halo_data[i]);
+    }
 
 	// damp after peer access
 	if (n_gpus == 1)
 	{
 		int i = 0;
-        	damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+        	damp_kernel<<<dimGrid, dimBlock, 0, stream_internal_data[i]>>>(
           	data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i], i, n_gpus);
 	} else {
 		for (int i = 0; i < n_gpus - 1; i++)
 		{
-		  cudaSetDevice(i);
-		  cudaDeviceSynchronize(); // sync the halo & internal region computation
+		  //cudaSetDevice(i);
+		  //cudaDeviceSynchronize(); // sync the halo & internal region computation
 		  if (i == 0)
-        		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+        		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal_data[i]>>>(
         	  	data_p0[i] + offset_cmp_h1, data_p1[i] + offset_cmp_h1, start3[i], end3[i] + 2 * radius, i, n_gpus);
 		  else if (i == n_gpus - 1)
-        		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+        		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal_data[i]>>>(
         	  	data_p0[i] + offset_rcv_h1 + radius + n1 * radius, data_p1[i] + offset_rcv_h1 + radius + n1 * radius, start3[i] - 2 * radius, end3[i], i, n_gpus);
 		  else
-        		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal[i]>>>(
+        		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal_data[i]>>>(
         	  	data_p0[i] + offset_rcv_h1 + radius + n1 * radius, data_p1[i] + offset_rcv_h1 + radius + n1 * radius, start3[i] - 2 * radius, end3[i] + 2 * radius, i, n_gpus);
 		}
 	}
@@ -1069,13 +1076,15 @@ fprintf(stderr,"running adjoint %d\n",it);
 	dim3 dimGridDataInject((rec_nx + BLOCKX_SIZE - 1) / BLOCKX_SIZE,
 			(rec_ny + BLOCKY_SIZE - 1) / BLOCKY_SIZE);
 	if (id + 7 < ntreceiver_internal) {
-      new_data_inject_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal[0]>>>(
+      new_data_inject_kernel<<<dimGridDataInject, dimBlock, 0, stream_internal_data[0]>>>(
           id, ii, data_p0[0] + lead_pad/*+offset_snd_h1*/, rec_x_width);
 	  data_counter++;
 	}
 
       for (int i = 0; i < n_gpus; i++) {
         cudaSetDevice(device[i]);
+		cudaStreamSynchronize(stream_internal_data[i]);
+		cudaStreamSynchronize(stream_internal[i]);
 		dim3 dimGridImg((n1 + 15)/ 16, (n2 + 15) / 16);
         img_kernel<<<dimGridImg, dimBlock, 0, stream_internal[i]>>>(
             img_gpu[i], data_p0[i] + lead_pad, src_p0[i] + lead_pad);
@@ -1083,7 +1092,10 @@ fprintf(stderr,"running adjoint %d\n",it);
 
     for (int i = 0; i < n_gpus; i++) {
       cudaSetDevice(i);
-      cudaDeviceSynchronize();
+	  cudaStreamSynchronize(stream_internal_data[i]);
+      cudaStreamSynchronize(stream_internal[i]);
+      cudaStreamSynchronize(stream_halo_data[i]);
+      cudaStreamSynchronize(stream_halo[i]);
       ptemp = src_p0[i];
       src_p0[i] = src_p1[i];
       src_p1[i] = ptemp;
