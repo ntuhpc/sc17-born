@@ -11,6 +11,7 @@ int ntblock_internal;
 #include "assert.h"
 #include "wave_fkernel.3d8o.cu"
 
+static float *src_p0[MAX_NUM_GPUS], *src_p1[MAX_NUM_GPUS];
 float *source_buf;
 int _jt;
 int npts_internal, source_blocked, ntsource_internal, ntreceiver_internal;
@@ -199,7 +200,6 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
                  float *p1, int jt, int npts, int nt) {
   // Propagate the source wavefield and return the final two 3D wavefield slices
   float *ptemp;
-  float *src_p0[n_gpus], *src_p1[n_gpus];
 
   cudaError_t error = cudaSuccess;
 
@@ -406,33 +406,43 @@ void source_prop(int n1, int n2, int n3, bool damp, bool get_last, float *p0,
   cudaEventDestroy(start);
   cudaEventDestroy(stop);
 
-  if (get_last) {
-    for (int i = 0; i < n_gpus; i++) {
-      cudaSetDevice(device[i]);
-      cudaMemcpy(p0 + i * n1 * n2 * (n3 - 2 * radius), // this is correct
-                 src_p0[i] + lead_pad /*+radius*n1*n2*/,
-                 n1 * n2 * n3 * sizeof(float),
-                 cudaMemcpyDeviceToHost);
-      cudaMemcpy(p1 + i * n1 * n2 * (n3 - 2 * radius),
-                 src_p1[i] + lead_pad /*+radius*n1*n2*/,
-                 n1 * n2 * n3 * sizeof(float),
-                 cudaMemcpyDeviceToHost);
-      // cudaMemcpy(p0+i*n1*n2*(n3-radius), src_p0[i]+radius*n1*n2,
-      // n1*n2*(n3-radius)*sizeof(float), cudaMemcpyDeviceToHost);
-      // cudaMemcpy(p1+i*n1*n2*(n3-radius), src_p1[i]+radius*n1*n2,
-      // n1*n2*(n3-radius)*sizeof(float), cudaMemcpyDeviceToHost);
-      // cudaMemcpy(src_p0[i]+lead_pad/*+radius*n1*n2*/,
-      // p0_s_cpu+i*n1*n2*(n3-2*radius), n1*n2*(n3/*-2*radius*/)*sizeof(float),
-    }
-  }
+  //if (get_last) {
+  //  for (int i = 0; i < n_gpus; i++) {
+  //    cudaSetDevice(device[i]);
+  //    cudaMemcpy(p0 + i * n1 * n2 * (n3 - 2 * radius), // this is correct
+  //               src_p0[i] + lead_pad /*+radius*n1*n2*/,
+  //               n1 * n2 * n3 * sizeof(float),
+  //               cudaMemcpyDeviceToHost);
+  //    cudaMemcpy(p1 + i * n1 * n2 * (n3 - 2 * radius),
+  //               src_p1[i] + lead_pad /*+radius*n1*n2*/,
+  //               n1 * n2 * n3 * sizeof(float),
+  //               cudaMemcpyDeviceToHost);
+  //    // cudaMemcpy(p0+i*n1*n2*(n3-radius), src_p0[i]+radius*n1*n2,
+  //    // n1*n2*(n3-radius)*sizeof(float), cudaMemcpyDeviceToHost);
+  //    // cudaMemcpy(p1+i*n1*n2*(n3-radius), src_p1[i]+radius*n1*n2,
+  //    // n1*n2*(n3-radius)*sizeof(float), cudaMemcpyDeviceToHost);
+  //    // cudaMemcpy(src_p0[i]+lead_pad/*+radius*n1*n2*/,
+  //    // p0_s_cpu+i*n1*n2*(n3-2*radius), n1*n2*(n3/*-2*radius*/)*sizeof(float),
+  //  }
+  //}
 
-  for (int i = 0; i < n_gpus; i++) {
-    cudaSetDevice(device[i]);
-    cudaFree(src_p0[i]);
-    cudaFree(src_p1[i]);
-  }
+  //for (int i = 0; i < n_gpus; i++) {
+  //  cudaSetDevice(device[i]);
+  //  cudaFree(src_p0[i]);
+  //  cudaFree(src_p1[i]);
+  //}
   // cudaFree(source_gpu);
   // cudaFree(srcgeom_gpu);
+  if (nt % 2 == 1)
+  {
+	  for (int i = 0; i < n_gpus; ++i)
+	  {
+	    float *temp = src_p0[i];
+		src_p0[i] = src_p1[i];
+		src_p1[i] = temp;
+		  //cudaMemcpy(src_p1[i], src_p0[i], (n1 * n2 * n3 + lead_pad) * sizeof(float), cudaMemcpyDeviceToDevice);
+	  }
+  }
 }
 
 void rtm_forward(int n1, int n2, int n3, int jt, float *img, float *dat,
@@ -821,8 +831,7 @@ void rtm_forward(int n1, int n2, int n3, int jt, float *img, float *dat,
 
 void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
                  float *p1_s_cpu, float *img, int npts_src, int nt) {
-  float *src_p0[n_gpus], *src_p1[n_gpus], *data_p0[n_gpus], *data_p1[n_gpus],
-      *img_gpu[n_gpus];
+  float *data_p0[n_gpus], *data_p1[n_gpus], *img_gpu[n_gpus];
   float *ptemp, *ptemp2;
 
   cudaError_t error = cudaSuccess;
@@ -836,12 +845,15 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
 
   for (int i = 0; i < n_gpus; i++) {
     cudaSetDevice(device[i]);
-    cudaMalloc((void **)&src_p0[i],
-               (n1 * n2 * n3 + lead_pad) * sizeof(float));
+	float *temp = src_p0[i];
+	src_p0[i] = src_p1[i];
+	src_p1[i] = temp;
     //cudaMalloc((void **)&src_p0[i],
-    //           (n1 * n2 * n3 + radius * n1 * n2 + lead_pad) * sizeof(float));
-    cudaMalloc((void **)&src_p1[i],
-               (n1 * n2 * n3 + lead_pad) * sizeof(float));
+    //           (n1 * n2 * n3 + lead_pad) * sizeof(float));
+    ////cudaMalloc((void **)&src_p0[i],
+    ////           (n1 * n2 * n3 + radius * n1 * n2 + lead_pad) * sizeof(float));
+    //cudaMalloc((void **)&src_p1[i],
+    //           (n1 * n2 * n3 + lead_pad) * sizeof(float));
     //cudaMalloc((void **)&src_p1[i],
     //           (n1 * n2 * n3 + radius * n1 * n2 + lead_pad) * sizeof(float));
     cudaMalloc((void **)&data_p0[i], (n1 * n2 * n3 + lead_pad) * sizeof(float));
@@ -852,23 +864,23 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
     cudaMemset(data_p0[i], 0, (n1 * n2 * n3 + lead_pad) * sizeof(float));
     cudaMemset(data_p1[i], 0, (n1 * n2 * n3 + lead_pad) * sizeof(float));
     cudaMemset(img_gpu[i], 0, (n1 * n2 * n3) * sizeof(float));
-    cudaMemset(src_p0[i], 0,
-               (n1 * n2 * n3 + lead_pad) * sizeof(float));
-    cudaMemset(src_p1[i], 0,
-               (n1 * n2 * n3 + lead_pad) * sizeof(float));
+    //cudaMemset(src_p0[i], 0,
+    //           (n1 * n2 * n3 + lead_pad) * sizeof(float));
+    //cudaMemset(src_p1[i], 0,
+    //           (n1 * n2 * n3 + lead_pad) * sizeof(float));
     //cudaMemset(src_p0[i], 0,
     //           (n1 * n2 * n3 + radius * n1 * n2 + lead_pad) * sizeof(float));
     //cudaMemset(src_p1[i], 0,
     //           (n1 * n2 * n3 + radius * n1 * n2 + lead_pad) * sizeof(float));
 
-    cudaMemcpy(src_p0[i] + lead_pad /*+radius*n1*n2*/,
-               p0_s_cpu + i * n1 * n2 * (n3 - 2 * radius),
-               n1 * n2 * (n3 /*-2*radius*/) * sizeof(float),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(src_p1[i] + lead_pad /*+radius*n1*n2*/,
-               p1_s_cpu + i * n1 * n2 * (n3 - 2 * radius),
-               n1 * n2 * (n3 /*-2*radius*/) * sizeof(float),
-               cudaMemcpyHostToDevice);
+    //cudaMemcpy(src_p0[i] + lead_pad /*+radius*n1*n2*/,
+    //           p0_s_cpu + i * n1 * n2 * (n3 - 2 * radius),
+    //           n1 * n2 * (n3 /*-2*radius*/) * sizeof(float),
+    //           cudaMemcpyHostToDevice);
+    //cudaMemcpy(src_p1[i] + lead_pad /*+radius*n1*n2*/,
+    //           p1_s_cpu + i * n1 * n2 * (n3 - 2 * radius),
+    //           n1 * n2 * (n3 /*-2*radius*/) * sizeof(float),
+    //           cudaMemcpyHostToDevice);
     // cudaMemcpy(src_p0[i]+lead_pad+radius*n1*n2,
     // p0_s_cpu/*+n1*n2*radius*/+i*n1*n2*(n3-2*radius),
     // n1*n2*(n3-2*radius)*sizeof(float), cudaMemcpyHostToDevice);
