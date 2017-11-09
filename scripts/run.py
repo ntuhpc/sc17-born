@@ -31,8 +31,10 @@ def create_image_param_file(image_name):
     params["label3"] = "Undefined"
     params["filename"] = "image.%s.json.dat" % image_name
 
+    # TODO: cp dat
     with open("image." + str(image_name) + ".json", "w") as image_param_file:
-        json.dump(params, image_param_file)
+        json.dump(params, image_param_file, indent=4)
+        image_param_file.write("\n")
 
 def create_migration_file(image_name, worker_id):
     # TODO: change to correct parameters
@@ -42,15 +44,16 @@ def create_migration_file(image_name, worker_id):
     params["wavelet"] = "wavelet.json"
     params["velocity"] = "velocity.json"
 
-    with open(str(worker_id) + ".P", "w") as migration_file:
-        json.dump(params, migration_file)
+    with open("mig." + str(worker_id) + ".P", "w") as migration_file:
+        json.dump(params, migration_file, indent=4)
+        migration_file.write("\n")
 
 def run_rtm(worker_id):
     gpus = list()
     for i in range(worker_id * 2, (worker_id + 1) * 2):
         gpus.append(str(i))
 
-    cmd = "RTM3D json=%s.P" % str(worker_id)
+    cmd = "RTM3D json=mig.%s.P" % str(worker_id)
     cmd = "CUDA_VISIBLE_DEVICES=" + ",".join(gpus) + " " + cmd
     print(cmd)
 
@@ -63,11 +66,12 @@ def run_rtm(worker_id):
 def create_add_file(image_name):
     params = dict()
     params["out"] = "final.image.json"
-    params["in1"] = "final.image.json"
-    params["in2"] = "image.%s.json" % image_name
+    params["in1"] = "image.%s.json" % image_name
+    params["in2"] = "final.image.json"
 
     with open("add.P", "w") as add_file:
-        json.dump(params, add_file)
+        json.dump(params, add_file, indent=4)
+        add_file.write("\n")
 
 def run_add():
     cmd = "Add json=add.P"
