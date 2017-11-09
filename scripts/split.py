@@ -4,10 +4,16 @@
 from persistqueue import Queue
 
 def load_all_data():
-    shots = [x for x in range(100)]
+    """
+    This function finds all shots and put them into a list
+    """
+    shots = [x for x in range(100)] # TODO: change this
     return shots
 
 def split_data(num_workers, data):
+    """
+    This function creates multiple queues and split the shots equally to all queues
+    """
     # create queues
     queues = list()
     for i in range(num_workers):
