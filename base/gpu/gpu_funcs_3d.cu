@@ -1070,7 +1070,7 @@ fprintf(stderr,"running adjoint %d\n",it);
 	} else {
 		for (int i = 0; i < n_gpus - 1; i++)
 		{
-		  //cudaSetDevice(i);
+		  cudaSetDevice(i);
 		  //cudaDeviceSynchronize(); // sync the halo & internal region computation
 		  if (i == 0)
         		damp_kernel<<<dimGrid, dimBlock, 0, stream_internal_data[i]>>>(
