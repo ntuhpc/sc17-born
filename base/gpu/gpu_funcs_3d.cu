@@ -948,7 +948,7 @@ void rtm_adjoint(int n1, int n2, int n3, int jt, float *p0_s_cpu,
   int data_counter = 0;
   int src_counter = 0;
   for (int it = nt - 1; it >= 0; it--) {
-fprintf(stderr,"running adjoint %d\n",it);
+//fprintf(stderr,"running adjoint %d\n",it);
     id_s = (it + 1) / _jtsS;
     i_s = it + 1 - id_s * _jtsS;
     int id = it / _jtdD;
